@@ -1,0 +1,1134 @@
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+import { createServer as createViteServer } from 'vite';
+import crypto from 'crypto';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json());
+
+  // In-memory data store for interactive microservices runtime simulation
+  const outboxEvents: Array<{
+    id: string;
+    aggregateType: string;
+    aggregateId: string;
+    eventType: string;
+    payload: any;
+    status: 'PENDING' | 'SENT' | 'FAILED';
+    retryCount: number;
+    createdAt: string;
+    processedAt?: string;
+  }> = [
+    {
+      id: 'OUTBOX-912a-4bc1',
+      aggregateType: 'APPOINTMENT',
+      aggregateId: 'APT-8401',
+      eventType: 'AppointmentScheduledEvent',
+      payload: { patientId: 'PAT-101', doctorId: 'DOC-204', specialty: 'Cardiology', time: '2026-08-28T09:00:00Z', fee: 150.00 },
+      status: 'SENT',
+      retryCount: 0,
+      createdAt: new Date(Date.now() - 120000).toISOString(),
+      processedAt: new Date(Date.now() - 118000).toISOString()
+    },
+    {
+      id: 'OUTBOX-773f-80ae',
+      aggregateType: 'PRESCRIPTION',
+      aggregateId: 'RX-9912',
+      eventType: 'PrescriptionOrderedEvent',
+      payload: { patientId: 'PAT-101', medication: 'Atorvastatin 20mg', dosage: 'Daily', qty: 30 },
+      status: 'SENT',
+      retryCount: 0,
+      createdAt: new Date(Date.now() - 60000).toISOString(),
+      processedAt: new Date(Date.now() - 58000).toISOString()
+    }
+  ];
+
+  const kafkaTopics: Record<string, Array<{ id: string; key: string; payload: any; timestamp: string; partition: number }>> = {
+    'healthcare.appointment.events': [
+      {
+        id: 'KAFKA-MSG-1',
+        key: 'APT-8401',
+        payload: { event: 'AppointmentScheduledEvent', patientId: 'PAT-101', doctorId: 'DOC-204' },
+        timestamp: new Date(Date.now() - 118000).toISOString(),
+        partition: 0
+      }
+    ],
+    'healthcare.emergency.events': [],
+    'healthcare.telemetry.anomalies': [],
+    'healthcare.fulfillment.coldchain': []
+  };
+
+  const notificationLogs: Array<{
+    id: string;
+    channel: 'EMAIL' | 'SMS' | 'PUSH' | 'ZALO_ZNS';
+    recipient: string;
+    title: string;
+    body: string;
+    isEmergency: boolean;
+    threadPool: 'emergencyCodeBlueExecutor' | 'standardNotificationExecutor';
+    timestamp: string;
+    status: 'DELIVERED' | 'QUEUED';
+  }> = [
+    {
+      id: 'NOTIF-01',
+      channel: 'EMAIL',
+      recipient: 'patient@healthcare.com',
+      title: 'Appointment Confirmation - Cardiology',
+      body: 'Your consultation with Dr. Emily Vance has been confirmed for Aug 28, 09:00 AM.',
+      isEmergency: false,
+      threadPool: 'standardNotificationExecutor',
+      timestamp: new Date(Date.now() - 117000).toISOString(),
+      status: 'DELIVERED'
+    }
+  ];
+
+  const medicalRecords = [
+    {
+      id: 'MED-1001',
+      patientId: 'PAT-101',
+      patientName: 'Eleanor Vance',
+      doctorId: 'DOC-204',
+      doctorName: 'Dr. Emily Vance (MD, FACC)',
+      diagnosis: 'Essential Hypertension Stage 2 with intermittent palpitations',
+      symptoms: ['Elevated BP', 'Palpitations', 'Occasional Dizziness', 'Fatigue'],
+      icd10Codes: ['I10', 'R00.2'],
+      clinicalNotes: 'Patient RPM telemetry indicates systolic readings >160 mmHg during morning spikes. Recommended continuous SpO2 and Holter patch monitoring.',
+      prescribedMedications: 'Lisinopril 10mg PO Daily, Metoprolol Tartrate 25mg BID',
+      consultationDate: '2026-08-25T14:30:00Z',
+      anomalyRisk: 'MODERATE'
+    },
+    {
+      id: 'MED-1002',
+      patientId: 'PAT-102',
+      patientName: 'Marcus Thorne',
+      doctorId: 'DOC-308',
+      doctorName: 'Dr. Alexander Hayes (MD, Endocrinologist)',
+      diagnosis: 'Type 2 Diabetes Mellitus with nocturnal hypoglycemia episodes',
+      symptoms: ['Hypoglycemia', 'Cold Sweats', 'Tremors', 'Blurred Vision'],
+      icd10Codes: ['E11.649', 'R73.03'],
+      clinicalNotes: 'Continuous Glucose Monitor (CGM) IoT stream caught blood glucose dipping to 54 mg/dL at 03:15 AM. Adjusted basal insulin dosage.',
+      prescribedMedications: 'Semaglutide 0.5mg SQ Weekly, Glucose rescue gel',
+      consultationDate: '2026-08-26T10:15:00Z',
+      anomalyRisk: 'HIGH'
+    },
+    {
+      id: 'MED-1003',
+      patientId: 'PAT-103',
+      patientName: 'Sophia Lin',
+      doctorId: 'DOC-412',
+      doctorName: 'Dr. Sarah Jenkins (MD, Pulmonologist)',
+      diagnosis: 'Chronic Obstructive Pulmonary Disease (COPD) with acute hypoxemia risk',
+      symptoms: ['Shortness of Breath', 'Wheezing', 'Hypoxia', 'Chronic Cough'],
+      icd10Codes: ['J44.1', 'R09.02'],
+      clinicalNotes: 'Pulse oximeter telemetry breached safety threshold (SpO2 88%). Home-care nurse dispatched for oxygen concentrator titration.',
+      prescribedMedications: 'Fluticasone/Salmeterol 250/50 mcg, Albuterol HFA PRN',
+      consultationDate: '2026-08-27T08:00:00Z',
+      anomalyRisk: 'CRITICAL'
+    }
+  ];
+
+  // Microservices list metadata
+  const microservicesMetadata = [
+    {
+      id: 'service-registry',
+      name: 'Service Registry',
+      tech: 'Netflix Eureka Server',
+      port: 8761,
+      status: 'UP',
+      instances: 2,
+      health: '100% OK',
+      role: 'Service discovery, heartbeat tracking, instance failover',
+      traffic: '320 req/s'
+    },
+    {
+      id: 'api-gateway',
+      name: 'API Gateway',
+      tech: 'Spring Cloud Gateway (Netty)',
+      port: 8080,
+      status: 'UP',
+      instances: 3,
+      health: '100% OK',
+      role: 'Reactive routing, Keycloak JWT token relay, Redis rate limiter, CORS',
+      traffic: '1,450 req/s'
+    },
+    {
+      id: 'user-auth-service',
+      name: 'User & IAM Service',
+      tech: 'Keycloak 24 OIDC / Spring Security',
+      port: 8081,
+      status: 'UP',
+      instances: 2,
+      health: '100% OK',
+      role: 'Granular RBAC (6 Roles), TOTP 2FA, HIPAA AuditLog, Doctor Licensing',
+      traffic: '180 req/s'
+    },
+    {
+      id: 'appointment-order-service',
+      name: 'Appointment & Consultation Service',
+      tech: 'Spring Boot 3.4 / Redisson / Outbox',
+      port: 8082,
+      status: 'UP',
+      instances: 3,
+      health: '100% OK',
+      role: 'Saga Orchestrator, Redisson RLock double-booking prevention, Outbox publisher, Strategy Copay',
+      traffic: '420 req/s'
+    },
+    {
+      id: 'care-dispatch-service',
+      name: 'Clinical Dispatch & Allocation',
+      tech: 'Spring Boot 3.4 / Geolocation Scoring',
+      port: 8083,
+      status: 'UP',
+      instances: 2,
+      health: '100% OK',
+      role: 'Nurse dispatch scoring algorithms, Code Blue Emergency Dispatch Task, Saga participant',
+      traffic: '95 req/s'
+    },
+    {
+      id: 'fulfillment-service',
+      name: 'Pharmacy & Diagnostic Fulfillment',
+      tech: 'Spring Boot 3.4 / HMAC-SHA256 Cryptography',
+      port: 8084,
+      status: 'UP',
+      instances: 2,
+      health: '100% OK',
+      role: 'Digital Proof of Delivery (POD), Cold-chain sample breach tracking, prescription dispensing',
+      traffic: '110 req/s'
+    },
+    {
+      id: 'tracking-service',
+      name: 'Patient Telemetry & RPM Tracking',
+      tech: 'Spring Boot 3.4 / WebSocket / Elasticsearch 8.17',
+      port: 8085,
+      status: 'UP',
+      instances: 3,
+      health: '100% OK',
+      role: 'Real-time IoT Vitals (ECG, SpO2, BP, Glucose), WebSocket ICU streaming, Elasticsearch indexing',
+      traffic: '2,800 events/s'
+    },
+    {
+      id: 'notification-service',
+      name: 'Critical Alert & Notification',
+      tech: 'Spring Kafka / Strategy Factory / Async Isolation',
+      port: 8086,
+      status: 'UP',
+      instances: 2,
+      health: '100% OK',
+      role: 'Multi-channel (Email, SMS, Push, Zalo), Code-Blue isolated thread pools, Kafka event consumer',
+      traffic: '350 msgs/s'
+    }
+  ];
+
+  // ==========================================
+  // API ROUTES
+  // ==========================================
+
+  app.get('/api/health', (req, res) => {
+    res.json({
+      status: 'UP',
+      timestamp: new Date().toISOString(),
+      eurekaCluster: 'http://service-registry:8761/eureka/',
+      activeMicroservices: 8,
+      kafkaBrokers: ['kafka:9092'],
+      redisNodes: ['redis:6379'],
+      elasticsearchCluster: 'healthcare-rpm-cluster (1 Node - Green)'
+    });
+  });
+
+  app.get('/api/microservices', (req, res) => {
+    res.json(microservicesMetadata);
+  });
+
+  // Execute Consultation Booking Saga
+  app.post('/api/saga/execute', (req, res) => {
+    const {
+      patientId = 'PAT-101',
+      doctorId = 'DOC-204',
+      doctorName = 'Dr. Emily Vance',
+      consultationType = 'SPECIALIST',
+      baseFee = 150.0,
+      insuranceCoverage = 0.8,
+      pricingStrategy = 'SpecialistPricingStrategy',
+      simulateInsuranceFailure = false
+    } = req.body;
+
+    const sagaId = 'SAGA-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+    const appointmentId = 'APT-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const timestamp = new Date().toISOString();
+
+    const steps = [];
+
+    // Step 1: Redisson RLock
+    steps.push({
+      stepNumber: 1,
+      name: 'HOLD_DOCTOR_SLOT',
+      service: 'appointment-order-service (Redisson RLock)',
+      status: 'SUCCESS',
+      detail: `Acquired distributed lock [lock:doctor:${doctorId}:slot:2026-08-28T09:00]. Time slot held in Redis.`,
+      durationMs: 14
+    });
+
+    if (simulateInsuranceFailure) {
+      steps.push({
+        stepNumber: 2,
+        name: 'VERIFY_INSURANCE_BILLING',
+        service: 'user-auth-service / Insurance Adapter',
+        status: 'FAILED',
+        detail: 'Insurance policy rejected: Policy expired or benefit quota exceeded.',
+        durationMs: 45
+      });
+
+      // Compensation
+      steps.push({
+        stepNumber: 3,
+        name: 'COMPENSATION: RELEASE_HELD_SLOT',
+        service: 'appointment-order-service',
+        status: 'COMPENSATED',
+        detail: `Distributed lock released for doctor ${doctorId}. Reverted slot reservation.`,
+        durationMs: 8
+      });
+
+      return res.json({
+        sagaId,
+        appointmentId,
+        success: false,
+        finalStatus: 'COMPENSATED_FAILURE',
+        steps,
+        failureReason: 'Insurance verification failed: Ineligible coverage.'
+      });
+    }
+
+    // Step 2: Copay calculation via Strategy Pattern
+    let copay = baseFee * (1 - insuranceCoverage);
+    if (pricingStrategy === 'SpecialistPricingStrategy') {
+      copay = Math.max(50.0, baseFee * 0.15); // Specialist floor
+    } else if (pricingStrategy === 'StandardConsultationPricingStrategy') {
+      copay = Math.min(25.0, baseFee * (1 - insuranceCoverage));
+    } else if (pricingStrategy === 'EmergencyCarePricingStrategy') {
+      copay = 100.0;
+    }
+
+    steps.push({
+      stepNumber: 2,
+      name: 'VERIFY_INSURANCE_BILLING',
+      service: 'appointment-order-service (Strategy Pattern)',
+      status: 'SUCCESS',
+      detail: `Strategy '${pricingStrategy}' applied. Base fee: $${baseFee.toFixed(2)}, Insurance covered: $${(baseFee - copay).toFixed(2)}, Patient Copay: $${copay.toFixed(2)}`,
+      durationMs: 22
+    });
+
+    // Step 3: Care dispatch participant
+    steps.push({
+      stepNumber: 3,
+      name: 'RESERVE_CARE_RESOURCE',
+      service: 'care-dispatch-service',
+      status: 'SUCCESS',
+      detail: `Clinical calendar locked for ${doctorName}. Consultation room room-cardiology-3 allocated.`,
+      durationMs: 18
+    });
+
+    // Step 4: Transactional Outbox write
+    const outboxId = 'OUTBOX-' + Math.random().toString(36).substring(2, 8);
+    const outboxRecord: {
+      id: string;
+      aggregateType: string;
+      aggregateId: string;
+      eventType: string;
+      payload: any;
+      status: 'PENDING' | 'SENT' | 'FAILED';
+      retryCount: number;
+      createdAt: string;
+      processedAt?: string;
+    } = {
+      id: outboxId,
+      aggregateType: 'APPOINTMENT',
+      aggregateId: appointmentId,
+      eventType: 'AppointmentScheduledEvent',
+      payload: { appointmentId, patientId, doctorId, copay, time: '2026-08-28T09:00:00Z' },
+      status: 'PENDING',
+      retryCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    outboxEvents.unshift(outboxRecord);
+
+    steps.push({
+      stepNumber: 4,
+      name: 'CONFIRM_BOOKING_OUTBOX',
+      service: 'appointment-order-service (PostgreSQL Outbox)',
+      status: 'SUCCESS',
+      detail: `Appointment persisted in DB. Event ${outboxId} written to transactional outbox table.`,
+      durationMs: 28
+    });
+
+    // Simulate instant Outbox Scheduler polling & Kafka publish
+    setTimeout(() => {
+      outboxRecord.status = 'SENT';
+      outboxRecord.processedAt = new Date().toISOString();
+      kafkaTopics['healthcare.appointment.events'].unshift({
+        id: 'KAFKA-' + Math.random().toString(36).substring(2, 8),
+        key: appointmentId,
+        payload: outboxRecord.payload,
+        timestamp: new Date().toISOString(),
+        partition: 0
+      });
+
+      // Trigger notification consumer
+      notificationLogs.unshift({
+        id: 'NOTIF-' + Math.random().toString(36).substring(2, 6),
+        channel: 'EMAIL',
+        recipient: 'patient@healthcare.com',
+        title: `Appointment Confirmed (${consultationType})`,
+        body: `Your appointment with ${doctorName} is confirmed for Aug 28, 09:00 AM. Copay: $${copay.toFixed(2)}`,
+        isEmergency: false,
+        threadPool: 'standardNotificationExecutor',
+        timestamp: new Date().toISOString(),
+        status: 'DELIVERED'
+      });
+      notificationLogs.unshift({
+        id: 'NOTIF-' + Math.random().toString(36).substring(2, 6),
+        channel: 'SMS',
+        recipient: '+1-555-0199',
+        title: 'SMS Reminder',
+        body: `Healthcare Alert: Appointment ${appointmentId} confirmed. See app for tele-visit link.`,
+        isEmergency: false,
+        threadPool: 'standardNotificationExecutor',
+        timestamp: new Date().toISOString(),
+        status: 'DELIVERED'
+      });
+    }, 1200);
+
+    res.json({
+      sagaId,
+      appointmentId,
+      success: true,
+      finalStatus: 'CONFIRMED',
+      copay: copay.toFixed(2),
+      steps,
+      outboxId
+    });
+  });
+
+  // Concurrency Simulation: Redisson Distributed Lock Race Condition Test
+  app.post('/api/concurrency/test-lock', (req, res) => {
+    const { doctorId = 'DOC-204', slot = '09:00AM', concurrentClients = 5, useRedissonLock = true } = req.body;
+
+    const results: Array<{ client: string; acquiredLock: boolean; outcome: string; timeTakenMs: number }> = [];
+
+    if (useRedissonLock) {
+      // Exactly 1 client acquires the lock, the other 4 get fast-failed or queued gracefully
+      results.push({
+        client: 'Patient Client #1 (Mobile App)',
+        acquiredLock: true,
+        outcome: 'SUCCESS: Redisson RLock acquired. Slot booked & confirmed.',
+        timeTakenMs: 18
+      });
+
+      for (let i = 2; i <= concurrentClients; i++) {
+        results.push({
+          client: `Patient Client #${i}`,
+          acquiredLock: false,
+          outcome: 'BLOCKED: Doctor slot is currently locked by another active booking transaction (LockAcquisitionTimeout).',
+          timeTakenMs: 25 + i * 5
+        });
+      }
+    } else {
+      // Unsafe race condition simulation (Double-booking disaster)
+      for (let i = 1; i <= concurrentClients; i++) {
+        results.push({
+          client: `Patient Client #${i}`,
+          acquiredLock: false,
+          outcome: 'DOUBLE-BOOKING DETECTED! Database constraint violation or collision without distributed locking.',
+          timeTakenMs: 12
+        });
+      }
+    }
+
+    res.json({
+      doctorId,
+      slot,
+      useRedissonLock,
+      totalConcurrentAttempts: concurrentClients,
+      results,
+      summary: useRedissonLock
+        ? 'Redisson RLock successfully prevented double-booking collision across multi-instance pods.'
+        : 'CRITICAL FAILURE: Without distributed locks, multiple concurrent threads caused slot collision!'
+    });
+  });
+
+  // Get Transactional Outbox Events
+  app.get('/api/outbox/events', (req, res) => {
+    res.json({
+      totalEvents: outboxEvents.length,
+      events: outboxEvents,
+      kafkaTopics
+    });
+  });
+
+  // Manually trigger Outbox De-queue / Dispatcher
+  app.post('/api/outbox/dequeue', (req, res) => {
+    let processedCount = 0;
+    outboxEvents.forEach(event => {
+      if (event.status === 'PENDING') {
+        event.status = 'SENT';
+        event.processedAt = new Date().toISOString();
+        processedCount++;
+
+        kafkaTopics['healthcare.appointment.events'].unshift({
+          id: 'KAFKA-' + Math.random().toString(36).substring(2, 8),
+          key: event.aggregateId,
+          payload: event.payload,
+          timestamp: new Date().toISOString(),
+          partition: 0
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      processedEvents: processedCount,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Elasticsearch Search API
+  app.get('/api/elasticsearch/search', (req, res) => {
+    const { q = '', anomaly = 'ALL' } = req.query as { q?: string; anomaly?: string };
+    const startTime = Date.now();
+
+    const queryLower = q.toLowerCase();
+
+    const matchedRecords = medicalRecords.filter(r => {
+      const matchText = (
+        r.diagnosis.toLowerCase().includes(queryLower) ||
+        r.clinicalNotes.toLowerCase().includes(queryLower) ||
+        r.patientName.toLowerCase().includes(queryLower) ||
+        r.symptoms.some(s => s.toLowerCase().includes(queryLower)) ||
+        r.icd10Codes.some(c => c.toLowerCase().includes(queryLower))
+      );
+
+      const matchAnomaly = anomaly === 'ALL' || r.anomalyRisk.toUpperCase() === anomaly.toUpperCase();
+      return matchText && matchAnomaly;
+    });
+
+    const tookMs = Date.now() - startTime + Math.floor(Math.random() * 4) + 1;
+
+    res.json({
+      tookMs,
+      totalHits: matchedRecords.length,
+      timedOut: false,
+      cluster: 'healthcare-rpm-cluster',
+      index: 'medical_records_search',
+      hits: matchedRecords
+    });
+  });
+
+  // Ingest Real-time Telemetry & Code-Blue Detection
+  app.post('/api/telemetry/ingest', (req, res) => {
+    const {
+      patientId = 'PAT-101',
+      deviceId = 'RPM-OXIMETER-88',
+      heartRate = 78,
+      systolicBp = 120,
+      diastolicBp = 80,
+      spo2 = 98.5,
+      bloodGlucose = 95
+    } = req.body;
+
+    let anomalyFlag = 'NORMAL';
+    let isEmergency = false;
+
+    if (heartRate > 130 || heartRate < 45) {
+      anomalyFlag = 'ARRHYTHMIA_TACHYCARDIA';
+      isEmergency = true;
+    } else if (spo2 < 89.0) {
+      anomalyFlag = 'CRITICAL_HYPOXIA';
+      isEmergency = true;
+    } else if (systolicBp >= 180 || diastolicBp >= 120) {
+      anomalyFlag = 'HYPERTENSIVE_CRISIS';
+      isEmergency = true;
+    } else if (bloodGlucose < 60) {
+      anomalyFlag = 'SEVERE_HYPOGLYCEMIA';
+      isEmergency = true;
+    }
+
+    const telemetryData = {
+      id: 'TEL-' + Math.random().toString(36).substring(2, 9),
+      patientId,
+      deviceId,
+      heartRate,
+      systolicBp,
+      diastolicBp,
+      spo2,
+      bloodGlucose,
+      anomalyFlag,
+      isEmergency,
+      recordedAt: new Date().toISOString()
+    };
+
+    if (isEmergency) {
+      // Emit to Kafka Emergency topic
+      kafkaTopics['healthcare.emergency.events'].unshift({
+        id: 'KAFKA-EMG-' + Math.random().toString(36).substring(2, 6),
+        key: patientId,
+        payload: telemetryData,
+        timestamp: new Date().toISOString(),
+        partition: 0
+      });
+
+      // Dispatch Code-Blue alert via isolated thread pool
+      notificationLogs.unshift({
+        id: 'NOTIF-' + Math.random().toString(36).substring(2, 6),
+        channel: 'PUSH',
+        recipient: 'ICU_ONCALL_TEAM_ALPHA',
+        title: `🚨 CODE BLUE: ${anomalyFlag}`,
+        body: `Patient ${patientId}: HR=${heartRate}bpm, SpO2=${spo2}%, BP=${systolicBp}/${diastolicBp}. Immediate medical response dispatched!`,
+        isEmergency: true,
+        threadPool: 'emergencyCodeBlueExecutor',
+        timestamp: new Date().toISOString(),
+        status: 'DELIVERED'
+      });
+      notificationLogs.unshift({
+        id: 'NOTIF-' + Math.random().toString(36).substring(2, 6),
+        channel: 'SMS',
+        recipient: '+1-911-EMERGENCY',
+        title: 'EMERGENCY DISPATCH',
+        body: `CRITICAL ALERT: Patient ${patientId} triggered ${anomalyFlag}. Paramedic dispatch en route.`,
+        isEmergency: true,
+        threadPool: 'emergencyCodeBlueExecutor',
+        timestamp: new Date().toISOString(),
+        status: 'DELIVERED'
+      });
+    }
+
+    res.json(telemetryData);
+  });
+
+  // Nurse & Clinical Dispatch Scoring API
+  app.post('/api/dispatch/match', (req, res) => {
+    const { patientLat = 37.7749, patientLon = -122.4194, specialty = 'ICU' } = req.body;
+
+    const candidates = [
+      { id: 'NR-101', name: 'Nurse Sarah Jenkins', role: 'NURSE', specialty: 'ICU', lat: 37.7812, lon: -122.4110, rating: 4.9, activeCases: 1 },
+      { id: 'NR-102', name: 'Nurse David Cho', role: 'NURSE', specialty: 'CARDIOLOGY', lat: 37.7950, lon: -122.4020, rating: 4.8, activeCases: 3 },
+      { id: 'DOC-204', name: 'Dr. Emily Vance', role: 'DOCTOR', specialty: 'ICU', lat: 37.7650, lon: -122.4250, rating: 5.0, activeCases: 0 },
+      { id: 'NR-103', name: 'Nurse Elena Gomez', role: 'NURSE', specialty: 'PEDIATRICS', lat: 37.7500, lon: -122.4300, rating: 4.7, activeCases: 2 }
+    ];
+
+    const scored = candidates.map(c => {
+      const dist = Math.sqrt(Math.pow(c.lat - patientLat, 2) + Math.pow(c.lon - patientLon, 2)) * 111.0;
+      const proximityScore = Math.max(0, 100 - dist * 8);
+      const specialtyScore = c.specialty.toUpperCase() === specialty.toUpperCase() ? 100 : 40;
+      const workloadScore = Math.max(0, 100 - c.activeCases * 25);
+      const ratingScore = (c.rating / 5.0) * 100;
+      const totalScore = proximityScore * 0.4 + specialtyScore * 0.3 + workloadScore * 0.2 + ratingScore * 0.1;
+      const etaMinutes = Math.max(4, Math.round(dist * 3.2));
+
+      return {
+        candidate: c,
+        distanceKm: Math.round(dist * 10) / 10,
+        totalScore: Math.round(totalScore * 10) / 10,
+        estimatedEtaMinutes: etaMinutes,
+        matchRationale: `Match score ${totalScore.toFixed(1)}/100 (${dist.toFixed(1)} km, ETA: ${etaMinutes} mins, ${c.specialty})`
+      };
+    });
+
+    scored.sort((a, b) => b.totalScore - a.totalScore);
+
+    res.json({
+      patientLocation: { lat: patientLat, lon: patientLon },
+      requiredSpecialty: specialty,
+      optimalMatch: scored[0],
+      allCandidates: scored
+    });
+  });
+
+  // Digital Proof of Delivery & Cold-chain check
+  app.post('/api/fulfillment/pod', (req, res) => {
+    const { prescriptionId = 'RX-9912', patientId = 'PAT-101', recipientName = 'Eleanor Vance', currentTemp = 4.2 } = req.body;
+
+    const podId = 'POD-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const timestamp = new Date().toISOString();
+    const rawData = `${podId}:${prescriptionId}:${patientId}:${timestamp}`;
+    const hash = crypto.createHmac('sha256', 'Healthcare-RPM-Digital-POD-Sign-Secret-2026').update(rawData).digest('hex');
+
+    const minTemp = 2.0;
+    const maxTemp = 8.0;
+    const isColdChainBreached = currentTemp < minTemp || currentTemp > maxTemp;
+
+    res.json({
+      podId,
+      prescriptionId,
+      patientId,
+      recipientSignature: `Digitally Signed by: ${recipientName}`,
+      cryptographicHash: '0x' + hash,
+      isSignatureValid: true,
+      timestamp,
+      coldChainTelemetry: {
+        sampleType: 'VACCINE_INSULIN_VIAL',
+        currentTempCelsius: currentTemp,
+        allowedRange: `${minTemp}°C - ${maxTemp}°C`,
+        isBreached: isColdChainBreached,
+        status: isColdChainBreached ? 'ANOMALY_QUARANTINED' : 'COLD_CHAIN_VERIFIED_OPTIMAL'
+      }
+    });
+  });
+
+  // In-memory active Keycloak sessions & HIPAA audit logs
+  const activeSessions: Map<string, { sessionId: string; userId: string; username: string; role: string; createdAt: string; lastActive: string }> = new Map();
+  const authAuditLogs: Array<{
+    id: number;
+    userId: string;
+    action: string;
+    ipAddress: string;
+    userAgent: string;
+    status: string;
+    hipaaEventType: string;
+    timestamp: string;
+  }> = [
+    {
+      id: 1,
+      userId: 'usr-admin-001',
+      action: 'USER_LOGIN_SUCCESS',
+      ipAddress: '192.168.1.100',
+      userAgent: 'Mozilla/5.0 (Healthcare-Console)',
+      status: 'SUCCESS',
+      hipaaEventType: 'HIPAA_ACCESS_GRANTED',
+      timestamp: new Date(Date.now() - 300000).toISOString()
+    },
+    {
+      id: 2,
+      userId: 'usr-doc-204',
+      action: 'USER_LOGIN_SUCCESS',
+      ipAddress: '10.0.4.12',
+      userAgent: 'Hospital-Workstation/v4.2',
+      status: 'SUCCESS',
+      hipaaEventType: 'HIPAA_2FA_ENFORCED',
+      timestamp: new Date(Date.now() - 180000).toISOString()
+    }
+  ];
+
+  const registeredUsers: Record<string, { id: string; password: string; role: string; email: string; firstName: string; lastName: string; totpEnabled: boolean; totpSecret: string }> = {
+    'doctor_emily': { id: 'usr-doc-204', password: 'Password123!', role: 'DOCTOR', email: 'emily.vance@healthcare.org', firstName: 'Emily', lastName: 'Vance, MD', totpEnabled: true, totpSecret: 'JBSWY3DPEHPK3PXP' },
+    'nurse_sarah': { id: 'usr-nr-101', password: 'Password123!', role: 'NURSE', email: 'sarah.nurse@healthcare.org', firstName: 'Sarah', lastName: 'Jenkins, RN', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
+    'user_pat': { id: 'usr-pat-101', password: 'Password123!', role: 'PATIENT', email: 'pat@healthcare.org', firstName: 'Eleanor', lastName: 'Vance', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
+    'pharm_alex': { id: 'usr-ph-301', password: 'Password123!', role: 'PHARMACIST', email: 'alex.rx@healthcare.org', firstName: 'Alex', lastName: 'Mercer, PharmD', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
+    'tech_kevin': { id: 'usr-lab-401', password: 'Password123!', role: 'LAB_TECH', email: 'kevin.lab@healthcare.org', firstName: 'Kevin', lastName: 'Park, MLS', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
+    'admin_sys': { id: 'usr-adm-001', password: 'Password123!', role: 'ADMIN', email: 'admin@healthcare.org', firstName: 'System', lastName: 'Administrator', totpEnabled: true, totpSecret: 'JBSWY3DPEHPK3PXP' }
+  };
+
+  // Login API (Direct Access Grant & TOTP 2FA Enforcement)
+  const handleLogin = (req: express.Request, res: express.Response) => {
+    const {
+      usernameOrEmail = '',
+      password = '',
+      totpCode = '',
+      deviceId = 'web-browser-client'
+    } = req.body;
+
+    const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || 'Healthcare-Client/1.0';
+
+    // Lookup user by username or email
+    const usernameKey = Object.keys(registeredUsers).find(
+      k => k.toLowerCase() === usernameOrEmail.toLowerCase() || registeredUsers[k].email.toLowerCase() === usernameOrEmail.toLowerCase()
+    );
+
+    const user = usernameKey ? registeredUsers[usernameKey] : null;
+
+    if (!user) {
+      authAuditLogs.unshift({
+        id: authAuditLogs.length + 1,
+        userId: usernameOrEmail || 'UNKNOWN',
+        action: 'USER_LOGIN_FAILED',
+        ipAddress: clientIp,
+        userAgent,
+        status: 'FAILED',
+        hipaaEventType: 'INVALID_CREDENTIALS',
+        timestamp: new Date().toISOString()
+      });
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    if (password && password !== user.password && password !== 'Password123!') {
+      authAuditLogs.unshift({
+        id: authAuditLogs.length + 1,
+        userId: user.id,
+        action: 'USER_LOGIN_FAILED',
+        ipAddress: clientIp,
+        userAgent,
+        status: 'FAILED',
+        hipaaEventType: 'INVALID_PASSWORD',
+        timestamp: new Date().toISOString()
+      });
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Check TOTP 2FA if enabled
+    if (user.totpEnabled) {
+      if (!totpCode || totpCode.trim() === '') {
+        authAuditLogs.unshift({
+          id: authAuditLogs.length + 1,
+          userId: user.id,
+          action: 'LOGIN_2FA_CHALLENGE',
+          ipAddress: clientIp,
+          userAgent,
+          status: 'CHALLENGE_REQUIRED',
+          hipaaEventType: 'HIPAA_2FA_ENFORCEMENT',
+          timestamp: new Date().toISOString()
+        });
+
+        return res.json({
+          totp_required: true,
+          totp_verified: false,
+          user: {
+            id: user.id,
+            email: user.email,
+            username: usernameKey,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            primaryRole: user.role,
+            roles: [user.role, 'default-roles-healthcare'],
+            totpEnabled: true
+          }
+        });
+      }
+
+      // If TOTP provided, verify length is 6 digits
+      if (totpCode.length !== 6 || isNaN(Number(totpCode))) {
+        authAuditLogs.unshift({
+          id: authAuditLogs.length + 1,
+          userId: user.id,
+          action: 'LOGIN_2FA_FAILED',
+          ipAddress: clientIp,
+          userAgent,
+          status: 'FAILURE',
+          hipaaEventType: 'INVALID_TOTP_CODE',
+          timestamp: new Date().toISOString()
+        });
+        return res.status(400).json({ error: 'Invalid 6-digit TOTP authentication code' });
+      }
+    }
+
+    // Generate JWT and Refresh tokens
+    const sessionId = 'sess-' + crypto.randomBytes(8).toString('hex');
+    const header = { alg: 'RS256', typ: 'JWT', kid: 'keycloak-healthcare-2026' };
+    const payload = {
+      iss: 'http://localhost:8080/realms/healthcare-realm',
+      sub: user.id,
+      preferred_username: usernameKey,
+      email: user.email,
+      name: `${user.firstName} ${user.lastName}`,
+      email_verified: true,
+      realm_access: {
+        roles: [user.role, 'default-roles-healthcare']
+      },
+      resource_access: {
+        'healthcare-api-gateway': {
+          roles: [user.role]
+        }
+      },
+      scope: 'openid email profile healthcare-api roles',
+      hipaa_compliance: 'AUDITED_LEVEL_3',
+      totp_verified: user.totpEnabled ? true : false,
+      session_state: sessionId,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600
+    };
+
+    const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
+    const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const dummySignature = crypto.createHmac('sha256', 'keycloak-healthcare-sign-2026').update(`${headerB64}.${payloadB64}`).digest('base64url');
+    const accessToken = `${headerB64}.${payloadB64}.${dummySignature}`;
+    const refreshToken = 'rt-' + crypto.randomBytes(24).toString('hex');
+
+    // Register active session
+    activeSessions.set(sessionId, {
+      sessionId,
+      userId: user.id,
+      username: usernameKey || user.email,
+      role: user.role,
+      createdAt: new Date().toISOString(),
+      lastActive: new Date().toISOString()
+    });
+
+    // Record HIPAA audit log
+    authAuditLogs.unshift({
+      id: authAuditLogs.length + 1,
+      userId: user.id,
+      action: 'USER_LOGIN_SUCCESS',
+      ipAddress: clientIp,
+      userAgent,
+      status: 'SUCCESS',
+      hipaaEventType: 'HIPAA_ACCESS_GRANTED',
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_expires_in: 18000,
+      session_state: sessionId,
+      scope: 'openid email profile healthcare-api roles',
+      totp_required: false,
+      totp_verified: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: usernameKey,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        primaryRole: user.role,
+        roles: [user.role, 'default-roles-healthcare'],
+        totpEnabled: user.totpEnabled,
+        active: true
+      },
+      decoded: payload
+    });
+  };
+
+  app.post('/api/auth/login', handleLogin);
+  app.post('/api/v1/auth/login', handleLogin);
+
+  // Logout API (Keycloak Single Sign-Out & Session Revocation)
+  const handleLogout = (req: express.Request, res: express.Response) => {
+    const { refresh_token = '', session_state = '', all_sessions = false } = req.body;
+    const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || 'Healthcare-Client/1.0';
+
+    if (session_state && activeSessions.has(session_state)) {
+      activeSessions.delete(session_state);
+    } else {
+      // Clear oldest session
+      const firstKey = activeSessions.keys().next().value;
+      if (firstKey) activeSessions.delete(firstKey);
+    }
+
+    // Record HIPAA audit log
+    authAuditLogs.unshift({
+      id: authAuditLogs.length + 1,
+      userId: req.body.userId || 'usr-session-revoked',
+      action: 'USER_LOGOUT',
+      ipAddress: clientIp,
+      userAgent,
+      status: 'SUCCESS',
+      hipaaEventType: 'HIPAA_SESSION_TERMINATED',
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      status: 'LOGGED_OUT',
+      message: 'Successfully logged out from Keycloak IAM. Active session and tokens invalidated.',
+      revokedAt: new Date().toISOString(),
+      keycloakSessionRevoked: true,
+      allSessionsTerminated: all_sessions
+    });
+  };
+
+  app.post('/api/auth/logout', handleLogout);
+  app.post('/api/v1/auth/logout', handleLogout);
+
+  // Token Refresh API
+  const handleRefresh = (req: express.Request, res: express.Response) => {
+    const { refresh_token = '' } = req.body;
+    const clientIp = req.ip || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || 'Healthcare-Client/1.0';
+
+    const header = { alg: 'RS256', typ: 'JWT', kid: 'keycloak-healthcare-2026' };
+    const payload = {
+      iss: 'http://localhost:8080/realms/healthcare-realm',
+      sub: 'usr-doc-204',
+      preferred_username: 'doctor_emily',
+      email: 'emily.vance@healthcare.org',
+      realm_access: { roles: ['DOCTOR', 'default-roles-healthcare'] },
+      resource_access: { 'healthcare-api-gateway': { roles: ['DOCTOR'] } },
+      scope: 'openid email profile healthcare-api roles',
+      hipaa_compliance: 'AUDITED_LEVEL_3',
+      totp_verified: true,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600
+    };
+
+    const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
+    const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const dummySignature = crypto.createHmac('sha256', 'keycloak-healthcare-sign-2026').update(`${headerB64}.${payloadB64}`).digest('base64url');
+    const newAccessToken = `${headerB64}.${payloadB64}.${dummySignature}`;
+    const newRefreshToken = 'rt-' + crypto.randomBytes(24).toString('hex');
+
+    authAuditLogs.unshift({
+      id: authAuditLogs.length + 1,
+      userId: 'usr-doc-204',
+      action: 'TOKEN_REFRESH',
+      ipAddress: clientIp,
+      userAgent,
+      status: 'SUCCESS',
+      hipaaEventType: 'HIPAA_TOKEN_RENEWED',
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      access_token: newAccessToken,
+      refresh_token: newRefreshToken,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_expires_in: 18000,
+      session_state: 'sess-' + crypto.randomBytes(8).toString('hex'),
+      totp_verified: true,
+      decoded: payload
+    });
+  };
+
+  app.post('/api/auth/refresh', handleRefresh);
+  app.post('/api/v1/auth/refresh', handleRefresh);
+
+  // HIPAA Audit Logs API
+  app.get('/api/auth/audit-logs', (req, res) => {
+    res.json(authAuditLogs.slice(0, 50));
+  });
+  app.get('/api/v1/auth/audit-logs', (req, res) => {
+    res.json(authAuditLogs.slice(0, 50));
+  });
+
+  // Keycloak IAM JWT Token Simulator (backward compat)
+  app.post('/api/auth/token', (req, res) => {
+    const { username = 'doctor_emily', role = 'DOCTOR', email = 'emily.vance@healthcare.org' } = req.body;
+
+    const header = { alg: 'RS256', typ: 'JWT', kid: 'keycloak-healthcare-2026' };
+    const payload = {
+      iss: 'http://localhost:8080/realms/healthcare-realm',
+      sub: 'usr-' + Math.random().toString(36).substring(2, 9),
+      preferred_username: username,
+      email: email,
+      email_verified: true,
+      realm_access: {
+        roles: [role, 'default-roles-healthcare']
+      },
+      resource_access: {
+        'healthcare-api-gateway': {
+          roles: [role]
+        }
+      },
+      scope: 'openid email profile healthcare-api',
+      hipaa_compliance: 'AUDITED_LEVEL_3',
+      totp_verified: true,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600
+    };
+
+    const headerB64 = Buffer.from(JSON.stringify(header)).toString('base64url');
+    const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const dummySignature = crypto.createHmac('sha256', 'dummy-keycloak-sig-2026').update(`${headerB64}.${payloadB64}`).digest('base64url');
+
+    const token = `${headerB64}.${payloadB64}.${dummySignature}`;
+
+    res.json({
+      access_token: token,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      decoded: payload,
+      role: role,
+      roles: payload.realm_access.roles
+    });
+  });
+
+  // Notification logs
+  app.get('/api/notifications', (req, res) => {
+    res.json({
+      totalNotifications: notificationLogs.length,
+      notifications: notificationLogs
+    });
+  });
+
+  // Codebase file tree and viewer endpoint so users can browse any Java or Config file
+  app.get('/api/codebase/files', (req, res) => {
+    const filesList: Array<{ path: string; category: string; description: string }> = [
+      { path: 'pom.xml', category: 'Root / Maven', description: 'Parent Maven POM with Java 21 & Spring Boot 3.4 dependency management' },
+      { path: 'docker-compose.yml', category: 'Infrastructure', description: 'Multi-container setup (Postgres, Kafka KRaft, Redis, Elasticsearch, Keycloak, Prometheus)' },
+      { path: 'init-postgres-databases.sql', category: 'Infrastructure', description: 'Initializes databases for all 6 transactional persistence stores' },
+      { path: 'keycloak-realm-export.json', category: 'Security / IAM', description: 'Keycloak 24 Realm export with 6 RBAC roles, OAuth2 clients & policies' },
+      { path: 'prometheus.yml', category: 'Observability', description: 'Prometheus metric scrape targets for all 8 microservices Actuator endpoints' },
+      { path: 'k8s/00-namespace.yaml', category: 'Kubernetes', description: 'Kubernetes namespace declaration' },
+      { path: 'k8s/01-configmaps-secrets.yaml', category: 'Kubernetes', description: 'ConfigMaps & Secrets for Spring Boot 3.4 microservices' },
+      { path: 'k8s/02-infrastructure.yaml', category: 'Kubernetes', description: 'StatefulSets & Deployments for Postgres, Redis, Kafka' },
+      { path: 'k8s/03-microservices-deployments.yaml', category: 'Kubernetes', description: 'Deployments & ClusterIP Services for Microservices' },
+      { path: 'k8s/04-ingress.yaml', category: 'Kubernetes', description: 'Ingress routing with WebSocket support for RPM stream' },
+      { path: 'k8s/05-hpa-pdb.yaml', category: 'Kubernetes', description: 'Horizontal Pod Autoscalers (HPA) and Pod Disruption Budgets (PDB)' },
+      { path: 'microservices/service-registry/src/main/java/com/healthcare/registry/ServiceRegistryApplication.java', category: 'Service Registry', description: 'Eureka Discovery Server main application' },
+      { path: 'microservices/api-gateway/src/main/java/com/healthcare/gateway/config/SecurityConfig.java', category: 'API Gateway', description: 'Spring Cloud Gateway reactive security & JWT validation' },
+      { path: 'microservices/api-gateway/src/main/java/com/healthcare/gateway/filter/JwtAuthenticationRelayFilter.java', category: 'API Gateway', description: 'JWT claim extraction & downstream header relay filter' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/controller/AuthController.java', category: 'User & IAM', description: 'REST Controller for /api/v1/auth/login, /api/v1/auth/logout, /refresh & TOTP 2FA' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/service/KeycloakAuthService.java', category: 'User & IAM', description: 'Keycloak OpenID token exchange, single sign-out revocation, and HIPAA audit logging' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/LoginRequest.java', category: 'User & IAM', description: 'Login Request DTO with credentials, TOTP code & client metadata' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/LoginResponse.java', category: 'User & IAM', description: 'Login Response DTO with access token, refresh token & user profile' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/LogoutRequest.java', category: 'User & IAM', description: 'Logout Request DTO for Keycloak session and refresh token revocation' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/security/ResourceServerSecurityConfig.java', category: 'User & IAM', description: 'Stateless Resource Server with Keycloak role converter' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/service/TotpService.java', category: 'User & IAM', description: 'TOTP 2FA Secret Generator & Verifier for HIPAA compliance' },
+      { path: 'microservices/user-auth-service/src/main/resources/db/changelog/changesets/01-create-user-tables.xml', category: 'User & IAM', description: 'Liquibase migration changeset for user accounts & HIPAA audit logs' },
+      { path: 'microservices/appointment-order-service/src/main/java/com/healthcare/appointment/service/AppointmentLockService.java', category: 'Appointment Service', description: 'Redisson RLock distributed locking for doctor time slots' },
+      { path: 'microservices/appointment-order-service/src/main/java/com/healthcare/appointment/saga/AppointmentSagaOrchestrator.java', category: 'Appointment Service', description: 'Saga Orchestrator state machine with automatic compensation rollback' },
+      { path: 'microservices/appointment-order-service/src/main/java/com/healthcare/appointment/outbox/OutboxPublisherService.java', category: 'Appointment Service', description: 'Transactional Outbox pattern event publisher for Kafka' },
+      { path: 'microservices/appointment-order-service/src/main/java/com/healthcare/appointment/strategy/SpecialistPricingStrategy.java', category: 'Appointment Service', description: 'Dynamic copay pricing strategy implementation' },
+      { path: 'microservices/care-dispatch-service/src/main/java/com/healthcare/dispatch/service/NurseDispatchScoringService.java', category: 'Care Dispatch', description: 'Weighted responder scoring algorithm (proximity, specialty, workload)' },
+      { path: 'microservices/fulfillment-service/src/main/java/com/healthcare/fulfillment/service/DigitalPodService.java', category: 'Fulfillment', description: 'Digital Proof of Delivery (POD) with HMAC-SHA256 signature' },
+      { path: 'microservices/tracking-service/src/main/java/com/healthcare/tracking/service/ElasticsearchMedicalSearchService.java', category: 'Tracking & RPM', description: 'Elasticsearch 8.17 medical record & anomaly symptom search' },
+      { path: 'microservices/tracking-service/src/main/java/com/healthcare/tracking/websocket/PatientMonitorWebSocketHandler.java', category: 'Tracking & RPM', description: 'Real-time WebSocket telemetry handler for ICU monitors' },
+      { path: 'microservices/notification-service/src/main/java/com/healthcare/notification/config/AsyncThreadPoolConfig.java', category: 'Notification', description: 'Isolated thread pools for Code-Blue emergency alerts vs standard queue' },
+      { path: 'microservices/notification-service/src/main/java/com/healthcare/notification/consumer/KafkaNotificationEventConsumer.java', category: 'Notification', description: 'Kafka event consumer with Notification Strategy Factory' }
+    ];
+
+    res.json(filesList);
+  });
+
+  app.get('/api/codebase/file', (req, res) => {
+    const filePath = req.query.path as string;
+    if (!filePath) {
+      return res.status(400).json({ error: 'Missing path parameter' });
+    }
+
+    try {
+      const fullPath = path.resolve(process.cwd(), filePath);
+      // Security check: ensure path is within cwd
+      if (!fullPath.startsWith(process.cwd())) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      if (fs.existsSync(fullPath)) {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        res.json({ path: filePath, content });
+      } else {
+        res.status(404).json({ error: 'File not found' });
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Vite middleware for development vs static for production
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Healthcare & RPM Microservices Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

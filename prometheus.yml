@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['api-gateway:8080']
+
+  - job_name: 'user-auth-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['user-auth-service:8081']
+
+  - job_name: 'appointment-order-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['appointment-order-service:8082']
+
+  - job_name: 'care-dispatch-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['care-dispatch-service:8083']
+
+  - job_name: 'fulfillment-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['fulfillment-service:8084']
+
+  - job_name: 'tracking-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['tracking-service:8085']
+
+  - job_name: 'notification-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['notification-service:8086']

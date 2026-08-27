@@ -1,0 +1,81 @@
+{
+  "realm": "healthcare-realm",
+  "displayName": "Enterprise Healthcare & RPM IAM",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "roles": {
+    "realm": [
+      {
+        "name": "PATIENT",
+        "description": "Patient role with access to own health data, appointments, vitals, prescriptions"
+      },
+      {
+        "name": "DOCTOR",
+        "description": "Physician role with clinical diagnostic, prescription authoring, and RPM monitoring permissions"
+      },
+      {
+        "name": "NURSE",
+        "description": "Home-care and triage nurse with dispatch tasks and patient telemetry check-in permissions"
+      },
+      {
+        "name": "PHARMACIST",
+        "description": "Pharmacy dispensing role with prescription validation and digital POD execution"
+      },
+      {
+        "name": "LAB_TECH",
+        "description": "Diagnostic laboratory technician with sample transit and test analysis ingestion permissions"
+      },
+      {
+        "name": "ADMIN",
+        "description": "System administrator with full RBAC governance and audit log access"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "healthcare-api-gateway",
+      "name": "Healthcare API Gateway Client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "gateway-client-secret-rpm-2026",
+      "bearerOnly": false,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "validRedirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "*"
+      ]
+    },
+    {
+      "clientId": "healthcare-web-app",
+      "name": "Healthcare Web & Mobile Portal",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "validRedirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "*"
+      ]
+    }
+  ]
+}
