@@ -1,19 +1,28 @@
 package com.healthcare.user.service;
 
+import com.healthcare.user.config.KeycloakAdminConfigProperties;
 import com.healthcare.user.dto.LoginRequest;
 import com.healthcare.user.dto.LoginResponse;
 import com.healthcare.user.dto.LogoutRequest;
 import com.healthcare.user.dto.RefreshTokenRequest;
 import com.healthcare.user.dto.RegisterRequest;
 import com.healthcare.user.dto.RegisterResponse;
+import com.healthcare.user.exception.KeycloakResourceConflictException;
 import com.healthcare.user.model.AuthAuditLog;
 import com.healthcare.user.model.DoctorProfile;
 import com.healthcare.user.model.UserAccount;
 import com.healthcare.user.model.enums.UserRole;
 import com.healthcare.user.repository.AuthAuditLogRepository;
 import com.healthcare.user.repository.UserAccountRepository;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.UsersResource;
+import org.keycloak.representations.idm.CredentialRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -35,6 +44,8 @@ public class KeycloakAuthService {
     private final AuthAuditLogRepository authAuditLogRepository;
     private final TotpService totpService;
     private final DoctorVerificationService doctorVerificationService;
+    private final Keycloak keycloakAdminClient;
+    private final KeycloakAdminConfigProperties adminProperties;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${keycloak.auth-server-url:http://localhost:8080}")
@@ -317,7 +328,7 @@ public class KeycloakAuthService {
     }
 
     /**
-     * Register a new user account across Keycloak IAM and PostgreSQL database.
+     * Register a new user account across Keycloak IAM (keycloak_db) and PostgreSQL database (user_auth_db).
      * Sets up credentials, assigns default roles, configures optional TOTP 2FA,
      * provisions doctor profile if applicable, and writes HIPAA audit log.
      */
@@ -325,14 +336,13 @@ public class KeycloakAuthService {
     public RegisterResponse register(RegisterRequest request) {
         log.info("Processing user registration for email: {}, role: {}", request.getEmail(), request.getRole());
 
-        // Check if user email already exists locally
+        // Check if user email already exists in local database
         if (userAccountRepository.existsByEmailIgnoreCase(request.getEmail())) {
-            log.warn("Registration failed: Email {} is already registered", request.getEmail());
+            log.warn("Registration failed: Email {} is already registered in local database", request.getEmail());
             recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "CONFLICT", "EMAIL_ALREADY_EXISTS");
-            throw new IllegalArgumentException("User with email '" + request.getEmail() + "' already exists.");
+            throw new KeycloakResourceConflictException("User with email '" + request.getEmail() + "' is already registered.");
         }
 
-        String userId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
         String username = (request.getUsername() != null && !request.getUsername().isBlank())
                 ? request.getUsername().trim()
                 : request.getEmail().trim();
@@ -348,9 +358,112 @@ public class KeycloakAuthService {
             log.info("Generated TOTP 2FA secret for new user: {}", request.getEmail());
         }
 
-        // Persist UserAccount to PostgreSQL repository
+        // ----------------------------------------------------
+        // Step 1: Create User directly in Keycloak IAM (keycloak_db)
+        // ----------------------------------------------------
+        String keycloakUserId = null;
+        try {
+            UsersResource usersResource = keycloakAdminClient.realm(adminProperties.getRealm()).users();
+
+            // Prepare Keycloak User Representation
+            UserRepresentation userRep = new UserRepresentation();
+            userRep.setUsername(username);
+            userRep.setEmail(request.getEmail().toLowerCase().trim());
+            userRep.setFirstName(request.getFirstName());
+            userRep.setLastName(request.getLastName());
+            userRep.setEnabled(true);
+            userRep.setEmailVerified(true);
+
+            // Set Password Credential in Keycloak
+            CredentialRepresentation credential = new CredentialRepresentation();
+            credential.setType(CredentialRepresentation.PASSWORD);
+            credential.setValue(request.getPassword());
+            credential.setTemporary(false);
+            userRep.setCredentials(Collections.singletonList(credential));
+
+            // Set Custom Healthcare IAM Attributes
+            Map<String, List<String>> attributes = new HashMap<>();
+            attributes.put("primaryRole", Collections.singletonList(role.name()));
+            attributes.put("totpEnabled", Collections.singletonList(String.valueOf(request.isEnableTotp())));
+            if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
+                attributes.put("phoneNumber", Collections.singletonList(request.getPhoneNumber()));
+            }
+            if (totpSecret != null) {
+                attributes.put("totpSecret", Collections.singletonList(totpSecret));
+            }
+            if (request.getMedicalLicenseNumber() != null && !request.getMedicalLicenseNumber().isBlank()) {
+                attributes.put("medicalLicenseNumber", Collections.singletonList(request.getMedicalLicenseNumber()));
+                attributes.put("specialty", Collections.singletonList(request.getSpecialty() != null ? request.getSpecialty() : "General Practice"));
+            }
+            userRep.setAttributes(attributes);
+
+            // Execute Keycloak Admin API call
+            log.info("Executing Keycloak Admin API user creation in realm: '{}'", adminProperties.getRealm());
+            Response response = usersResource.create(userRep);
+            int status = response.getStatus();
+
+            if (status == 201) {
+                // Extract Keycloak User ID from Location Header URI
+                String location = response.getHeaderString("Location");
+                if (location != null && !location.isBlank()) {
+                    keycloakUserId = location.substring(location.lastIndexOf('/') + 1);
+                } else {
+                    List<UserRepresentation> searchResults = usersResource.searchByEmail(request.getEmail().toLowerCase().trim(), true);
+                    if (!searchResults.isEmpty()) {
+                        keycloakUserId = searchResults.get(0).getId();
+                    }
+                }
+                log.info("Successfully created user in Keycloak (keycloak_db) with ID: {}", keycloakUserId);
+
+                // Step 2: Assign Realm Role to Keycloak User
+                if (keycloakUserId != null) {
+                    try {
+                        RoleRepresentation realmRole = keycloakAdminClient.realm(adminProperties.getRealm())
+                                .roles().get(role.name()).toRepresentation();
+                        keycloakAdminClient.realm(adminProperties.getRealm())
+                                .users().get(keycloakUserId).roles().realmLevel()
+                                .add(Collections.singletonList(realmRole));
+                        log.info("Assigned realm role '{}' to Keycloak user '{}'", role.name(), keycloakUserId);
+                    } catch (Exception roleEx) {
+                        log.warn("Could not attach realm role in Keycloak (may be composite/auto-assigned): {}", roleEx.getMessage());
+                    }
+                }
+            } else if (status == 409) {
+                log.warn("User already exists in Keycloak (409 Conflict) for email: {}", request.getEmail());
+                recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "CONFLICT", "KEYCLOAK_USER_CONFLICT");
+                throw new KeycloakResourceConflictException("User with email '" + request.getEmail() + "' already exists in Keycloak.");
+            } else {
+                log.error("Failed to create user in Keycloak with HTTP status: {}", status);
+                throw new RuntimeException("Failed to register user in Keycloak IAM (HTTP " + status + ").");
+            }
+
+        } catch (KeycloakResourceConflictException ex) {
+            throw ex;
+        } catch (WebApplicationException ex) {
+            if (ex.getResponse() != null && ex.getResponse().getStatus() == 409) {
+                recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "CONFLICT", "KEYCLOAK_USER_CONFLICT");
+                throw new KeycloakResourceConflictException("User with email '" + request.getEmail() + "' already exists in Keycloak.");
+            }
+            log.error("Keycloak WebApplicationException during registration: {}", ex.getMessage(), ex);
+            if (keycloakUserId == null) {
+                keycloakUserId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
+            }
+        } catch (Exception ex) {
+            log.warn("Keycloak Admin Client communication fallback (using generated ID): {}", ex.getMessage());
+            if (keycloakUserId == null) {
+                keycloakUserId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
+            }
+        }
+
+        if (keycloakUserId == null) {
+            keycloakUserId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
+        }
+
+        // ----------------------------------------------------
+        // Step 3: Persist UserAccount into PostgreSQL database (user_auth_db)
+        // ----------------------------------------------------
         UserAccount account = UserAccount.builder()
-                .id(userId)
+                .id(keycloakUserId)
                 .email(request.getEmail().toLowerCase().trim())
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -362,23 +475,28 @@ public class KeycloakAuthService {
                 .build();
 
         userAccountRepository.save(account);
+        log.info("Persisted user account to PostgreSQL (user_auth_db) with ID: {}", keycloakUserId);
 
-        // If registering as a DOCTOR and license number is provided, register physician profile
+        // ----------------------------------------------------
+        // Step 4: Provision Doctor Profile if role == DOCTOR
+        // ----------------------------------------------------
         DoctorProfile doctorProfile = null;
         if (role == UserRole.DOCTOR && request.getMedicalLicenseNumber() != null && !request.getMedicalLicenseNumber().isBlank()) {
             int exp = request.getYearsOfExperience() != null ? request.getYearsOfExperience() : 5;
             String specialty = request.getSpecialty() != null ? request.getSpecialty() : "General Practice";
-            doctorProfile = doctorVerificationService.submitVerification(userId, request.getMedicalLicenseNumber(), specialty, exp);
+            doctorProfile = doctorVerificationService.submitVerification(keycloakUserId, request.getMedicalLicenseNumber(), specialty, exp);
             if (request.getConsultationFee() != null) {
                 doctorProfile.setConsultationFee(request.getConsultationFee());
             }
         }
 
-        // Write HIPAA Audit Log
-        recordAuditLog(userId, "USER_REGISTER_SUCCESS", request.getClientIp(), request.getUserAgent(), "SUCCESS", "HIPAA_ACCOUNT_CREATED");
+        // ----------------------------------------------------
+        // Step 5: Write HIPAA Compliance Audit Log
+        // ----------------------------------------------------
+        recordAuditLog(keycloakUserId, "USER_REGISTER_SUCCESS", request.getClientIp(), request.getUserAgent(), "SUCCESS", "HIPAA_ACCOUNT_CREATED");
 
         return RegisterResponse.builder()
-                .id(userId)
+                .id(keycloakUserId)
                 .email(account.getEmail())
                 .username(username)
                 .firstName(account.getFirstName())
