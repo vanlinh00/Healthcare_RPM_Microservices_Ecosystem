@@ -1,52 +1,160 @@
 {
+  "id": "healthcare-realm",
   "realm": "healthcare-realm",
-  "displayName": "Enterprise Healthcare & RPM IAM",
+  "displayName": "Healthcare RPM & Telehealth Realm",
   "enabled": true,
-  "sslRequired": "external",
+  "sslRequired": "none",
   "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
+  "permanentLockout": false,
   "maxFailureWaitSeconds": 900,
   "minimumQuickLoginWaitSeconds": 60,
   "waitIncrementSeconds": 60,
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 5,
+  "accessTokenLifespan": 3600,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
   "roles": {
     "realm": [
       {
+        "id": "role-patient-id",
         "name": "PATIENT",
-        "description": "Patient role with access to own health data, appointments, vitals, prescriptions"
+        "description": "Patient user with self-telemetry and personal medical records access",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": [
+            "LEVEL_1"
+          ],
+          "department": [
+            "PATIENT_PORTAL"
+          ]
+        }
       },
       {
+        "id": "role-doctor-id",
         "name": "DOCTOR",
-        "description": "Physician role with clinical diagnostic, prescription authoring, and RPM monitoring permissions"
+        "description": "Attending Physician / Clinician with EHR prescription and diagnostic clearance",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": [
+            "LEVEL_3"
+          ],
+          "dea_prescribing_active": [
+            "true"
+          ],
+          "department": [
+            "CLINICAL_MEDICINE"
+          ]
+        }
       },
       {
+        "id": "role-nurse-id",
         "name": "NURSE",
-        "description": "Home-care and triage nurse with dispatch tasks and patient telemetry check-in permissions"
+        "description": "Registered Nurse for remote patient monitoring, vitals triage, and emergency dispatch",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": [
+            "LEVEL_2"
+          ],
+          "department": [
+            "TRIAGE_RPM"
+          ]
+        }
       },
       {
+        "id": "role-pharmacist-id",
         "name": "PHARMACIST",
-        "description": "Pharmacy dispensing role with prescription validation and digital POD execution"
+        "description": "Licensed Pharmacist with digital POD signing and cold-chain fulfillment clearance",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": [
+            "LEVEL_2"
+          ],
+          "license_verified": [
+            "true"
+          ],
+          "department": [
+            "PHARMACY_FULFILLMENT"
+          ]
+        }
       },
       {
+        "id": "role-labtech-id",
         "name": "LAB_TECH",
-        "description": "Diagnostic laboratory technician with sample transit and test analysis ingestion permissions"
+        "description": "Laboratory Diagnostic Specialist for test execution and diagnostic validation",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": [
+            "LEVEL_2"
+          ],
+          "department": [
+            "PATHOLOGY_LAB"
+          ]
+        }
       },
       {
+        "id": "role-admin-id",
         "name": "ADMIN",
-        "description": "System administrator with full RBAC governance and audit log access"
+        "description": "System administrator with full RBAC governance and HIPAA audit log access",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": [
+            "LEVEL_4_ROOT"
+          ],
+          "hipaa_officer": [
+            "true"
+          ]
+        }
+      },
+      {
+        "id": "role-cmo-id",
+        "name": "CHIEF_MEDICAL_OFFICER",
+        "description": "Executive composite role inheriting DOCTOR, NURSE, and LAB_TECH administrative oversight",
+        "composite": true,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "composites": {
+          "realm": [
+            "DOCTOR",
+            "NURSE",
+            "LAB_TECH"
+          ]
+        },
+        "attributes": {
+          "clearance_level": [
+            "LEVEL_4_EXECUTIVE"
+          ],
+          "executive_board": [
+            "true"
+          ]
+        }
       }
     ]
   },
   "clients": [
     {
+      "id": "client-api-gateway-id",
       "clientId": "healthcare-api-gateway",
       "name": "Healthcare API Gateway Client",
+      "description": "Spring Cloud API Gateway & Resource Server Client with Service Account",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "gateway-client-secret-rpm-2026",
@@ -57,24 +165,249 @@
       "serviceAccountsEnabled": true,
       "redirectUris": [
         "http://localhost:3000/*",
-        "http://localhost:8080/*"
+        "http://localhost:8080/*",
+        "http://localhost:8081/*"
       ],
       "webOrigins": [
         "*"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
       ]
     },
     {
+      "id": "client-web-portal-id",
       "clientId": "healthcare-web-app",
       "name": "Healthcare Web & Mobile Portal",
+      "description": "SPA and Mobile Native Application Client",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
       "redirectUris": [
         "http://localhost:3000/*"
       ],
       "webOrigins": [
         "*"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ]
+    },
+    {
+      "id": "client-admin-cli-id",
+      "clientId": "admin-cli",
+      "name": "Keycloak Admin CLI Client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "users": [
+    {
+      "id": "usr-doc-204",
+      "username": "doctor_emily",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Emily",
+      "lastName": "Vance, MD",
+      "email": "emily.vance@healthcare.org",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "DOCTOR",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "npi_number": [
+          "1849204910"
+        ],
+        "specialty": [
+          "Cardiology"
+        ],
+        "department": [
+          "Cardiology"
+        ],
+        "totp_configured": [
+          "true"
+        ]
+      }
+    },
+    {
+      "id": "usr-nr-101",
+      "username": "nurse_sarah",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Sarah",
+      "lastName": "Jenkins, RN",
+      "email": "sarah.jenkins@healthcare.org",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "NURSE",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "license_id": [
+          "RN-84921"
+        ],
+        "shift": [
+          "DAY_TRIAGE"
+        ]
+      }
+    },
+    {
+      "id": "usr-pat-101",
+      "username": "user_pat",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Eleanor",
+      "lastName": "Vance",
+      "email": "eleanor.vance@patientmail.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "PATIENT",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "medical_record_number": [
+          "MRN-77402"
+        ],
+        "primary_care_physician": [
+          "Dr. Emily Vance"
+        ]
+      }
+    },
+    {
+      "id": "usr-ph-301",
+      "username": "pharm_alex",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alex",
+      "lastName": "Mercer, PharmD",
+      "email": "alex.mercer@healthcare.org",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "PHARMACIST",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "pharmacy_license": [
+          "RPH-99201"
+        ]
+      }
+    },
+    {
+      "id": "usr-lab-401",
+      "username": "tech_kevin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Kevin",
+      "lastName": "Park",
+      "email": "kevin.park@healthcare.org",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "LAB_TECH",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "lab_station": [
+          "HEMA-LAB-4"
+        ]
+      }
+    },
+    {
+      "id": "usr-adm-001",
+      "username": "admin_sys",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "System",
+      "lastName": "Administrator",
+      "email": "admin@healthcare.org",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMIN",
+        "CHIEF_MEDICAL_OFFICER",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "security_clearance": [
+          "LEVEL_4_ROOT"
+        ]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "id": "grp-clinical-staff",
+      "name": "Clinical Care Team",
+      "path": "/Clinical Care Team",
+      "realmRoles": [
+        "DOCTOR",
+        "NURSE"
+      ]
+    },
+    {
+      "id": "grp-pharmacy-team",
+      "name": "Pharmacy Fulfillment Specialists",
+      "path": "/Pharmacy Fulfillment Specialists",
+      "realmRoles": [
+        "PHARMACIST"
+      ]
+    },
+    {
+      "id": "grp-diagnostics",
+      "name": "Diagnostic Pathology Lab",
+      "path": "/Diagnostic Pathology Lab",
+      "realmRoles": [
+        "LAB_TECH"
       ]
     }
   ]
