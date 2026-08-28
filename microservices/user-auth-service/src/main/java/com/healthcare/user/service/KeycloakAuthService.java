@@ -425,38 +425,35 @@ public class KeycloakAuthService {
                                 .add(Collections.singletonList(realmRole));
                         log.info("Assigned realm role '{}' to Keycloak user '{}'", role.name(), keycloakUserId);
                     } catch (Exception roleEx) {
-                        log.warn("Could not attach realm role in Keycloak (may be composite/auto-assigned): {}", roleEx.getMessage());
+                        log.warn("Could not attach realm role in Keycloak (role '{}' might be mapped via group or default): {}", role.name(), roleEx.getMessage());
                     }
+                } else {
+                    throw new KeycloakOperationException("Keycloak user created but failed to retrieve user ID from Keycloak.");
                 }
             } else if (status == 409) {
                 log.warn("User already exists in Keycloak (409 Conflict) for email: {}", request.getEmail());
                 recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "CONFLICT", "KEYCLOAK_USER_CONFLICT");
-                throw new KeycloakResourceConflictException("User with email '" + request.getEmail() + "' already exists in Keycloak.");
+                throw new KeycloakResourceConflictException("User with email '" + request.getEmail() + "' already exists in Keycloak IAM.");
             } else {
-                log.error("Failed to create user in Keycloak with HTTP status: {}", status);
-                throw new RuntimeException("Failed to register user in Keycloak IAM (HTTP " + status + ").");
+                String errorDetails = response.hasEntity() ? response.readEntity(String.class) : "";
+                log.error("Failed to create user in Keycloak with HTTP status: {}, details: {}", status, errorDetails);
+                recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "FAILED", "KEYCLOAK_CREATION_FAILED");
+                throw new KeycloakOperationException("Failed to register user in Keycloak IAM (HTTP " + status + "): " + errorDetails, HttpStatus.valueOf(status));
             }
 
-        } catch (KeycloakResourceConflictException ex) {
+        } catch (KeycloakResourceConflictException | KeycloakOperationException ex) {
             throw ex;
         } catch (WebApplicationException ex) {
+            recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "FAILED", "KEYCLOAK_API_ERROR");
             if (ex.getResponse() != null && ex.getResponse().getStatus() == 409) {
-                recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "CONFLICT", "KEYCLOAK_USER_CONFLICT");
                 throw new KeycloakResourceConflictException("User with email '" + request.getEmail() + "' already exists in Keycloak.");
             }
             log.error("Keycloak WebApplicationException during registration: {}", ex.getMessage(), ex);
-            if (keycloakUserId == null) {
-                keycloakUserId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
-            }
+            throw new KeycloakOperationException("Keycloak API error during registration: " + ex.getMessage(), ex);
         } catch (Exception ex) {
-            log.warn("Keycloak Admin Client communication fallback (using generated ID): {}", ex.getMessage());
-            if (keycloakUserId == null) {
-                keycloakUserId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
-            }
-        }
-
-        if (keycloakUserId == null) {
-            keycloakUserId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
+            recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "FAILED", "KEYCLOAK_COMMUNICATION_ERROR");
+            log.error("Failed to register user in Keycloak: {}", ex.getMessage(), ex);
+            throw new KeycloakOperationException("Failed to register user in Keycloak IAM: " + ex.getMessage(), ex);
         }
 
         // ----------------------------------------------------
