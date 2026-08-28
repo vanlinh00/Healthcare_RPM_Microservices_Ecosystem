@@ -997,6 +997,309 @@ async function startServer() {
     res.json(authAuditLogs.slice(0, 50));
   });
 
+  // ==========================================
+  // KEYCLOAK IAM ROLES & PERMISSIONS MANAGEMENT (ADMIN SDK)
+  // ==========================================
+  interface KeycloakRoleItem {
+    id: string;
+    name: string;
+    description: string;
+    composite: boolean;
+    clientRole: boolean;
+    containerId: string;
+    attributes: Record<string, string[]>;
+    compositeSubRoles?: string[];
+  }
+
+  const keycloakRoles: KeycloakRoleItem[] = [
+    {
+      id: 'role-pat-01',
+      name: 'PATIENT',
+      description: 'Patient role with self-telemetry and personal medical records access',
+      composite: false,
+      clientRole: false,
+      containerId: 'healthcare-realm',
+      attributes: { clearance_level: ['LEVEL_1'], department: ['PATIENT_PORTAL'] }
+    },
+    {
+      id: 'role-doc-02',
+      name: 'DOCTOR',
+      description: 'Attending Clinician with prescription and clinical diagnostics authorization',
+      composite: false,
+      clientRole: false,
+      containerId: 'healthcare-realm',
+      attributes: { clearance_level: ['LEVEL_3'], dea_prescribing_active: ['true'], department: ['CLINICAL_MEDICINE'] }
+    },
+    {
+      id: 'role-nr-03',
+      name: 'NURSE',
+      description: 'Registered Nurse for remote patient monitoring, vitals triage, and dispatch response',
+      composite: false,
+      clientRole: false,
+      containerId: 'healthcare-realm',
+      attributes: { clearance_level: ['LEVEL_2'], department: ['TRIAGE_RPM'] }
+    },
+    {
+      id: 'role-ph-04',
+      name: 'PHARMACIST',
+      description: 'Licensed Pharmacist with digital POD signing and cold-chain fulfillment clearance',
+      composite: false,
+      clientRole: false,
+      containerId: 'healthcare-realm',
+      attributes: { clearance_level: ['LEVEL_2'], license_verified: ['true'], department: ['PHARMACY_FULFILLMENT'] }
+    },
+    {
+      id: 'role-lab-05',
+      name: 'LAB_TECH',
+      description: 'Laboratory Diagnostic Specialist for diagnostic order execution and result verification',
+      composite: false,
+      clientRole: false,
+      containerId: 'healthcare-realm',
+      attributes: { clearance_level: ['LEVEL_2'], department: ['PATHOLOGY_LAB'] }
+    },
+    {
+      id: 'role-adm-06',
+      name: 'ADMIN',
+      description: 'System administrator with full RBAC governance and audit log access',
+      composite: false,
+      clientRole: false,
+      containerId: 'healthcare-realm',
+      attributes: { clearance_level: ['LEVEL_4_ROOT'], hipaa_officer: ['true'] }
+    },
+    {
+      id: 'role-cmo-07',
+      name: 'CHIEF_MEDICAL_OFFICER',
+      description: 'Executive composite role inheriting DOCTOR, NURSE, and LAB_TECH administrative oversight',
+      composite: true,
+      clientRole: false,
+      containerId: 'healthcare-realm',
+      attributes: { clearance_level: ['LEVEL_4_EXECUTIVE'], executive_board: ['true'] },
+      compositeSubRoles: ['DOCTOR', 'NURSE', 'LAB_TECH']
+    }
+  ];
+
+  const userRoleMappings: Record<string, string[]> = {
+    'usr-doc-204': ['DOCTOR', 'default-roles-healthcare'],
+    'usr-nr-101': ['NURSE', 'default-roles-healthcare'],
+    'usr-pat-101': ['PATIENT', 'default-roles-healthcare'],
+    'usr-ph-301': ['PHARMACIST', 'default-roles-healthcare'],
+    'usr-lab-401': ['LAB_TECH', 'default-roles-healthcare'],
+    'usr-adm-001': ['ADMIN', 'CHIEF_MEDICAL_OFFICER', 'default-roles-healthcare']
+  };
+
+  const groupRoleMappings: Record<string, string[]> = {
+    'grp-clinical-staff': ['DOCTOR', 'NURSE'],
+    'grp-pharmacy-team': ['PHARMACIST'],
+    'grp-diagnostics': ['LAB_TECH']
+  };
+
+  // Get Realm Roles
+  app.get('/api/v1/iam/roles', (req, res) => {
+    const query = (req.query.query as string || '').toLowerCase();
+    let result = keycloakRoles;
+    if (query) {
+      result = result.filter(r => r.name.toLowerCase().includes(query) || r.description.toLowerCase().includes(query));
+    }
+    res.json(result);
+  });
+
+  // Get Client Roles
+  app.get('/api/v1/iam/roles/client/:clientId', (req, res) => {
+    const { clientId } = req.params;
+    const clientRoles = [
+      {
+        id: `role-client-${clientId}-viewer`,
+        name: `${clientId}.viewer`,
+        description: `Read-only access to client ${clientId}`,
+        composite: false,
+        clientRole: true,
+        containerId: clientId,
+        attributes: { scope: ['read'] }
+      },
+      {
+        id: `role-client-${clientId}-operator`,
+        name: `${clientId}.operator`,
+        description: `Operational dispatch access to client ${clientId}`,
+        composite: false,
+        clientRole: true,
+        containerId: clientId,
+        attributes: { scope: ['read', 'write'] }
+      }
+    ];
+    res.json(clientRoles);
+  });
+
+  // Get Role by Name
+  app.get('/api/v1/iam/roles/:roleName', (req, res) => {
+    const { roleName } = req.params;
+    const role = keycloakRoles.find(r => r.name.toUpperCase() === roleName.toUpperCase());
+    if (!role) {
+      return res.status(404).json({ error: 'Not Found', message: `Role '${roleName}' not found in Keycloak realm.` });
+    }
+    res.json(role);
+  });
+
+  // Create Role
+  app.post('/api/v1/iam/roles', (req, res) => {
+    const { name, description = '', composite = false, clientRole = false, clientId = '', subRoleNames = [], attributes = {} } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Bad Request', message: 'Role name is required.' });
+    }
+    const exists = keycloakRoles.some(r => r.name.toUpperCase() === name.toUpperCase());
+    if (exists) {
+      return res.status(409).json({ error: 'Conflict', message: `Role '${name}' already exists in Keycloak.` });
+    }
+
+    const newRole: KeycloakRoleItem = {
+      id: 'role-' + Math.random().toString(36).substring(2, 8),
+      name: name.toUpperCase(),
+      description,
+      composite,
+      clientRole,
+      containerId: clientRole ? clientId : 'healthcare-realm',
+      attributes,
+      compositeSubRoles: composite ? subRoleNames : undefined
+    };
+    keycloakRoles.push(newRole);
+
+    authAuditLogs.unshift({
+      id: authAuditLogs.length + 1,
+      userId: 'usr-admin-sdk',
+      action: 'ROLE_CREATED',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'] || 'Keycloak-Admin-Client/24',
+      status: 'SUCCESS',
+      hipaaEventType: 'IAM_RBAC_ROLE_CREATED',
+      timestamp: new Date().toISOString()
+    });
+
+    res.status(201).json(newRole);
+  });
+
+  // Update Role
+  app.put('/api/v1/iam/roles/:roleName', (req, res) => {
+    const { roleName } = req.params;
+    const { description, attributes, subRoleNames } = req.body;
+    const roleIndex = keycloakRoles.findIndex(r => r.name.toUpperCase() === roleName.toUpperCase());
+    if (roleIndex === -1) {
+      return res.status(404).json({ error: 'Not Found', message: `Role '${roleName}' not found.` });
+    }
+
+    if (description !== undefined) keycloakRoles[roleIndex].description = description;
+    if (attributes !== undefined) keycloakRoles[roleIndex].attributes = attributes;
+    if (subRoleNames !== undefined) {
+      keycloakRoles[roleIndex].composite = subRoleNames.length > 0;
+      keycloakRoles[roleIndex].compositeSubRoles = subRoleNames;
+    }
+
+    res.json(keycloakRoles[roleIndex]);
+  });
+
+  // Delete Role
+  app.delete('/api/v1/iam/roles/:roleName', (req, res) => {
+    const { roleName } = req.params;
+    const roleIndex = keycloakRoles.findIndex(r => r.name.toUpperCase() === roleName.toUpperCase());
+    if (roleIndex === -1) {
+      return res.status(404).json({ error: 'Not Found', message: `Role '${roleName}' not found.` });
+    }
+
+    keycloakRoles.splice(roleIndex, 1);
+    res.json({ status: 'DELETED', message: `Role '${roleName}' successfully deleted from Keycloak.` });
+  });
+
+  // Add sub-roles to composite
+  app.post('/api/v1/iam/roles/:roleName/composites', (req, res) => {
+    const { roleName } = req.params;
+    const subRoleNames: string[] = req.body;
+    const role = keycloakRoles.find(r => r.name.toUpperCase() === roleName.toUpperCase());
+    if (!role) {
+      return res.status(404).json({ error: 'Not Found', message: `Parent composite role '${roleName}' not found.` });
+    }
+    role.composite = true;
+    role.compositeSubRoles = Array.from(new Set([...(role.compositeSubRoles || []), ...subRoleNames]));
+    res.json(role);
+  });
+
+  // Remove sub-roles from composite
+  app.delete('/api/v1/iam/roles/:roleName/composites', (req, res) => {
+    const { roleName } = req.params;
+    const subRoleNames: string[] = req.body;
+    const role = keycloakRoles.find(r => r.name.toUpperCase() === roleName.toUpperCase());
+    if (!role) {
+      return res.status(404).json({ error: 'Not Found', message: `Parent composite role '${roleName}' not found.` });
+    }
+    if (role.compositeSubRoles) {
+      role.compositeSubRoles = role.compositeSubRoles.filter(s => !subRoleNames.includes(s));
+      if (role.compositeSubRoles.length === 0) role.composite = false;
+    }
+    res.json(role);
+  });
+
+  // User Role Mappings (Assign)
+  app.post('/api/v1/iam/mappings/users', (req, res) => {
+    const { userId, roleNames = [] } = req.body;
+    if (!userId || !roleNames.length) {
+      return res.status(400).json({ error: 'Bad Request', message: 'userId and roleNames are required.' });
+    }
+    userRoleMappings[userId] = Array.from(new Set([...(userRoleMappings[userId] || []), ...roleNames]));
+    res.json({ status: 'ASSIGNED', userId, roles: userRoleMappings[userId] });
+  });
+
+  // User Role Mappings (Revoke)
+  app.delete('/api/v1/iam/mappings/users', (req, res) => {
+    const { userId, roleNames = [] } = req.body;
+    if (userRoleMappings[userId]) {
+      userRoleMappings[userId] = userRoleMappings[userId].filter(r => !roleNames.includes(r));
+    }
+    res.json({ status: 'REVOKED', userId, roles: userRoleMappings[userId] || [] });
+  });
+
+  // Group Role Mappings (Assign)
+  app.post('/api/v1/iam/mappings/groups', (req, res) => {
+    const { groupId, roleNames = [] } = req.body;
+    groupRoleMappings[groupId] = Array.from(new Set([...(groupRoleMappings[groupId] || []), ...roleNames]));
+    res.json({ status: 'ASSIGNED', groupId, roles: groupRoleMappings[groupId] });
+  });
+
+  // Group Role Mappings (Revoke)
+  app.delete('/api/v1/iam/mappings/groups', (req, res) => {
+    const { groupId, roleNames = [] } = req.body;
+    if (groupRoleMappings[groupId]) {
+      groupRoleMappings[groupId] = groupRoleMappings[groupId].filter(r => !roleNames.includes(r));
+    }
+    res.json({ status: 'REVOKED', groupId, roles: groupRoleMappings[groupId] || [] });
+  });
+
+  // Effective Permissions Audit
+  app.get('/api/v1/iam/mappings/users/:userId/effective', (req, res) => {
+    const { userId } = req.params;
+    const directRoles = userRoleMappings[userId] || ['PATIENT'];
+
+    // Expand composite roles
+    const effectiveRolesSet = new Set<string>(directRoles);
+    directRoles.forEach(roleName => {
+      const found = keycloakRoles.find(r => r.name === roleName);
+      if (found && found.composite && found.compositeSubRoles) {
+        found.compositeSubRoles.forEach(sub => effectiveRolesSet.add(sub));
+      }
+    });
+
+    res.json({
+      userId,
+      username: userId === 'usr-doc-204' ? 'doctor_emily' : userId === 'usr-adm-001' ? 'admin_sys' : 'user_' + userId,
+      email: userId === 'usr-doc-204' ? 'emily.vance@healthcare.org' : 'user@healthcare.org',
+      directRealmRoles: directRoles,
+      compositeEffectiveRealmRoles: Array.from(effectiveRolesSet),
+      directClientRoles: {
+        'healthcare-api-gateway': ['gateway.user']
+      },
+      compositeEffectiveClientRoles: {
+        'healthcare-api-gateway': ['gateway.user', 'gateway.audited']
+      },
+      totalEffectiveRolesCount: effectiveRolesSet.size + 2
+    });
+  });
+
   // Keycloak IAM JWT Token Simulator (backward compat)
   app.post('/api/auth/token', (req, res) => {
     const { username = 'doctor_emily', role = 'DOCTOR', email = 'emily.vance@healthcare.org' } = req.body;

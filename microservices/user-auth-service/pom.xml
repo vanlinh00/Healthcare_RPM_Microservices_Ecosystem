@@ -48,6 +48,12 @@
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
         </dependency>
+        <!-- Keycloak Admin Client SDK -->
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-admin-client</artifactId>
+            <version>${keycloak.version}</version>
+        </dependency>
         <!-- TOTP 2FA Library -->
         <dependency>
             <groupId>dev.samstevens.totp</groupId>

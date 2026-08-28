@@ -55,7 +55,7 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
-      "validRedirectUris": [
+      "redirectUris": [
         "http://localhost:3000/*",
         "http://localhost:8080/*"
       ],
@@ -70,7 +70,7 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "validRedirectUris": [
+      "redirectUris": [
         "http://localhost:3000/*"
       ],
       "webOrigins": [
