@@ -29,8 +29,7 @@ public class KeycloakAdminClientConfig {
                 .realm(properties.getRealm())
                 .clientId(properties.getClientId())
                 .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
-                .clientSecret(properties.getClientSecret())
-                .poolSize(properties.getConnectionPoolSize());
+                .clientSecret(properties.getClientSecret());
 
         // Support password grant fallback if admin credentials are provided
         if (properties.getAdminUsername() != null && !properties.getAdminUsername().isBlank()) {

@@ -1,0 +1,902 @@
+{
+  "info": {
+    "_postman_id": "b78ea53c-9072-44ac-9035-user-auth-service",
+    "name": "Healthcare User Auth & Keycloak IAM Service",
+    "description": "Comprehensive Postman Collection for Healthcare User-Auth Service (Spring Boot 3.4 + Keycloak 24 IAM). Includes OIDC Authentication, TOTP 2FA, Session Management, HIPAA Audit Logs, Dynamic RBAC / Role & Permission Management, Composite Roles, User/Group Mappings, and Actuator Observability.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "keycloakUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "realm",
+      "value": "healthcare-realm",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "healthcare-backend-client",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "totpSecret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "type": "string"
+    },
+    {
+      "key": "groupId",
+      "value": "g1h2i3j4-k5l6-7m8n-9o0p-1q2r3s4t5u6v",
+      "type": "string"
+    },
+    {
+      "key": "sampleRoleName",
+      "value": "RPM_CLINICAL_AUDITOR",
+      "type": "string"
+    },
+    {
+      "key": "doctorId",
+      "value": "DOC-98231",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication & Session (Keycloak OIDC)",
+      "item": [
+        {
+          "name": "1.1 Login - Doctor / Clinician",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.access_token) {",
+                  "        pm.collectionVariables.set('accessToken', json.access_token);",
+                  "        console.log('Access token saved to collection variable.');",
+                  "    }",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "        console.log('Refresh token saved to collection variable.');",
+                  "    }",
+                  "    pm.test('Status code is 200 and access_token present', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        pm.expect(json.access_token).to.be.a('string');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"doctor_smith\",\n  \"password\": \"doctorpassword123\",\n  \"deviceId\": \"WORKSTATION-ICU-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Authenticates user with Keycloak IAM credentials. Automatically stores access_token and refresh_token in Postman variables."
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 Login - Admin User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.access_token) {",
+                  "        pm.collectionVariables.set('accessToken', json.access_token);",
+                  "    }",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"admin_sarah\",\n  \"password\": \"adminpassword123\",\n  \"deviceId\": \"SECURE-ADMIN-CONSOLE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Authenticates Admin user with Keycloak IAM."
+          },
+          "response": []
+        },
+        {
+          "name": "1.3 Login with 2FA / TOTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"doctor_smith\",\n  \"password\": \"doctorpassword123\",\n  \"totpCode\": \"123456\",\n  \"deviceId\": \"WORKSTATION-ICU-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Authenticates user with password and time-based one-time password (TOTP)."
+          },
+          "response": []
+        },
+        {
+          "name": "1.4 Refresh Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.access_token) {",
+                  "        pm.collectionVariables.set('accessToken', json.access_token);",
+                  "    }",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            },
+            "description": "Refreshes expired access tokens using the OIDC Refresh Token Grant."
+          },
+          "response": []
+        },
+        {
+          "name": "1.5 Get Current User Profile (/me)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "me"]
+            },
+            "description": "Returns authenticated user claims, subject UUID, and Keycloak roles from JWT."
+          },
+          "response": []
+        },
+        {
+          "name": "1.6 Logout & Revoke Session",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\",\n  \"all_sessions\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            },
+            "description": "Terminates Keycloak active session and revokes refresh token."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. HIPAA 2FA & Security Verification",
+      "item": [
+        {
+          "name": "2.1 Setup TOTP 2FA Secret & QR Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.secret) {",
+                  "        pm.collectionVariables.set('totpSecret', json.secret);",
+                  "        console.log('TOTP Secret stored: ' + json.secret);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/totp/setup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "totp", "setup"]
+            },
+            "description": "Generates a RFC 6238 TOTP Base32 secret and QR Code Data URI for Google Authenticator."
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 Verify TOTP Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"secret\": \"{{totpSecret}}\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/totp/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "totp", "verify"]
+            },
+            "description": "Validates a 6-digit TOTP code against the generated secret."
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 Audit Logs (Admin Only)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/audit-logs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "audit-logs"]
+            },
+            "description": "Fetches recent HIPAA audit log entries (logins, logouts, failures, IP, User Agent). Requires ADMIN role."
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 Verify Doctor License (Admin Only)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/doctor/verify-license?doctorId={{doctorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "doctor", "verify-license"],
+              "query": [
+                {
+                  "key": "doctorId",
+                  "value": "{{doctorId}}"
+                }
+              ]
+            },
+            "description": "Admin verification of physician medical license in state registry."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Keycloak IAM Role Management",
+      "item": [
+        {
+          "name": "3.1 Create Realm Role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"RPM_TELEMETRY_REVIEWER\",\n  \"description\": \"Clinical reviewer for RPM real-time ECG and telemetry streams\",\n  \"composite\": false,\n  \"clientRole\": false,\n  \"attributes\": {\n    \"clearance\": [\"HIPAA_LEVEL_2\"],\n    \"department\": [\"CARDIOLOGY\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles"]
+            },
+            "description": "Creates a new realm-level role in Keycloak 24."
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 Create Composite Role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"HEAD_OF_CARDIOLOGY\",\n  \"description\": \"Composite cardiology lead with clinical, dispatch, and prescription powers\",\n  \"composite\": true,\n  \"subRoleNames\": [\"DOCTOR\", \"RPM_TELEMETRY_REVIEWER\", \"CARE_DISPATCHER\"],\n  \"clientRole\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles"]
+            },
+            "description": "Creates a composite role containing sub-roles."
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 Get All Realm Roles",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles"]
+            },
+            "description": "Lists all realm-level roles in the Keycloak realm."
+          },
+          "response": []
+        },
+        {
+          "name": "3.4 Search Realm Roles by Query",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles?query=DOCTOR",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles"],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "DOCTOR"
+                }
+              ]
+            },
+            "description": "Filters roles matching prefix or substring query."
+          },
+          "response": []
+        },
+        {
+          "name": "3.5 Get Role By Name",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles/DOCTOR?clientRole=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles", "DOCTOR"],
+              "query": [
+                {
+                  "key": "clientRole",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Fetches representation and attributes of a role."
+          },
+          "response": []
+        },
+        {
+          "name": "3.6 Update Role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"RPM_TELEMETRY_REVIEWER\",\n  \"description\": \"Updated description: Senior reviewer for RPM cardiac telemetry\",\n  \"composite\": false,\n  \"clientRole\": false,\n  \"attributes\": {\n    \"clearance\": [\"HIPAA_LEVEL_3\"],\n    \"updated_by\": [\"admin_sarah\"]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles/RPM_TELEMETRY_REVIEWER",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles", "RPM_TELEMETRY_REVIEWER"]
+            },
+            "description": "Updates metadata attributes or description of an existing role."
+          },
+          "response": []
+        },
+        {
+          "name": "3.7 Delete Role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles/RPM_TELEMETRY_REVIEWER?clientRole=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles", "RPM_TELEMETRY_REVIEWER"],
+              "query": [
+                {
+                  "key": "clientRole",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Deletes a role from Keycloak."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Composite Role Hierarchy & Delegation",
+      "item": [
+        {
+          "name": "4.1 Add Sub-Roles to Composite",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  \"CARE_DISPATCHER\",\n  \"PHARMACIST\"\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles/DOCTOR/composites?clientRole=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles", "DOCTOR", "composites"],
+              "query": [
+                {
+                  "key": "clientRole",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Adds child roles to a composite parent role."
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 Remove Sub-Roles from Composite",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  \"PHARMACIST\"\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/roles/DOCTOR/composites?clientRole=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "roles", "DOCTOR", "composites"],
+              "query": [
+                {
+                  "key": "clientRole",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Removes child roles from a composite parent role."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. User & Group Role Mappings",
+      "item": [
+        {
+          "name": "5.1 Assign Roles to User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"roleNames\": [\"DOCTOR\", \"CARE_DISPATCHER\"],\n  \"clientRole\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/mappings/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "mappings", "users"]
+            },
+            "description": "Assigns direct realm roles to a Keycloak user."
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 Revoke Roles from User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"roleNames\": [\"CARE_DISPATCHER\"],\n  \"clientRole\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/mappings/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "mappings", "users"]
+            },
+            "description": "Revokes realm roles from a user."
+          },
+          "response": []
+        },
+        {
+          "name": "5.3 Assign Roles to Group",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupId\": \"{{groupId}}\",\n  \"roleNames\": [\"NURSE_PRACTITIONER\"],\n  \"clientRole\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/mappings/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "mappings", "groups"]
+            },
+            "description": "Assigns roles to a Keycloak group."
+          },
+          "response": []
+        },
+        {
+          "name": "5.4 Revoke Roles from Group",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"groupId\": \"{{groupId}}\",\n  \"roleNames\": [\"NURSE_PRACTITIONER\"],\n  \"clientRole\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/mappings/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "mappings", "groups"]
+            },
+            "description": "Revokes roles from a Keycloak group."
+          },
+          "response": []
+        },
+        {
+          "name": "5.5 Audit Effective User Permissions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/iam/mappings/users/{{userId}}/effective",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "iam", "mappings", "users", "{{userId}}", "effective"]
+            },
+            "description": "Calculates complete effective permissions hierarchy (direct realm roles, client roles, and inherited composite sub-roles) for a user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Actuator & Observability",
+      "item": [
+        {
+          "name": "6.1 Actuator Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Spring Boot Actuator Health Check (PostgreSQL, Kafka, Disk, Ping)."
+          },
+          "response": []
+        },
+        {
+          "name": "6.2 Actuator Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/prometheus",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "prometheus"]
+            },
+            "description": "Micrometer Prometheus metrics stream for scraping."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

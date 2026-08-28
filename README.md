@@ -145,6 +145,21 @@ The User & IAM microservice manages authentication, authorization, Keycloak sess
 
 ---
 
+## 📮 Postman Collection
+
+A complete Postman Collection v2.1.0 is provided in `./postman/healthcare-user-auth-service.postman_collection.json`.
+
+It contains:
+- **Authentication & Sessions**: Login (Doctor/Admin), 2FA TOTP login, Token Refresh (OIDC), `/me` profile inspection, Logout / Keycloak session revocation.
+- **HIPAA 2FA & Verification**: Setup TOTP 2FA Secret & QR Code URI, Verify 6-digit TOTP, HIPAA Audit Logs query, Physician Medical License verification.
+- **Keycloak IAM Dynamic RBAC**: Create Realm & Composite Roles, Search & Query Roles, Get Role By Name, Update Role Metadata, Delete Roles.
+- **Composite Role Hierarchy**: Add and remove child sub-roles dynamically from parent composite roles.
+- **User & Group Role Mappings**: Assign/Revoke direct roles to Keycloak users, Assign/Revoke roles to groups, and Audit complete Effective Permissions.
+- **Actuator & Observability**: Health checks and Prometheus metrics endpoints.
+- **Automated Token Management**: Post-response test scripts automatically extract and store `access_token` and `refresh_token` into collection variables for subsequent authenticated calls.
+
+---
+
 ## ⚙️ Key Architectural Patterns Implemented
 
 1. **Saga Orchestration Pattern (`appointment-order-service`)**:

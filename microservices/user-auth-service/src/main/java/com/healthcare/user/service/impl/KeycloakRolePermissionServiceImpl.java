@@ -412,8 +412,8 @@ public class KeycloakRolePermissionServiceImpl implements KeycloakRolePermission
                 .id(rep.getId())
                 .name(rep.getName())
                 .description(rep.getDescription())
-                .composite(rep.isComposite() != null && rep.isComposite())
-                .clientRole(rep.getClientRole() != null && rep.getClientRole())
+                .composite(rep.isComposite())
+                .clientRole(Boolean.TRUE.equals(rep.getClientRole()))
                 .containerId(rep.getContainerId())
                 .attributes(rep.getAttributes())
                 .build();
