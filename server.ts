@@ -999,7 +999,6 @@ async function startServer() {
       refresh_expires_in: 18000,
       session_state: sessionId,
       scope: 'openid email profile healthcare-api roles',
-      groups: userGroups,
       totp_required: false,
       totp_verified: true,
       user: {
@@ -1010,7 +1009,6 @@ async function startServer() {
         lastName: user.lastName,
         primaryRole: user.role,
         roles: [user.role, 'default-roles-healthcare'],
-        groups: userGroups,
         totpEnabled: user.totpEnabled,
         active: true
       },

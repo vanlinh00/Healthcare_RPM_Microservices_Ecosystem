@@ -383,6 +383,9 @@
       "firstName": "Doctor",
       "lastName": "Reader",
       "email": "doctor_reader@healthcare.org",
+      "groups": [
+        "/Doctors-Readers"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -408,6 +411,9 @@
       "firstName": "Doctor",
       "lastName": "Editor",
       "email": "doctor_editor@healthcare.org",
+      "groups": [
+        "/Doctors-Writers"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -433,6 +439,9 @@
       "firstName": "Emily",
       "lastName": "Vance, MD",
       "email": "emily.vance@healthcare.org",
+      "groups": [
+        "/Doctors-Writers"
+      ],
       "credentials": [
         {
           "type": "password",

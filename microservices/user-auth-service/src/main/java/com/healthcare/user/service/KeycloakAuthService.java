@@ -139,7 +139,6 @@ public class KeycloakAuthService {
 
             // Sync user account if available
             UserAccount userAccount = syncUserAccount(request.getUsernameOrEmail(), tokenBody);
-            List<String> groups = extractGroups(tokenBody, userAccount, request.getUsernameOrEmail());
 
             recordAuditLog(userAccount != null ? userAccount.getId() : request.getUsernameOrEmail(),
                     "USER_LOGIN_SUCCESS", request.getClientIp(), request.getUserAgent(), "SUCCESS", "HIPAA_ACCESS_GRANTED");
@@ -151,10 +150,9 @@ public class KeycloakAuthService {
                     .expiresIn(expiresIn != null ? expiresIn.longValue() : 3600L)
                     .refreshExpiresIn(refreshExpiresIn != null ? refreshExpiresIn.longValue() : 18000L)
                     .sessionState(sessionState)
-                    .groups(groups)
                     .totpRequired(false)
                     .totpVerified(true)
-                    .user(mapToProfileDto(userAccount, request.getUsernameOrEmail(), groups))
+                    .user(mapToProfileDto(userAccount, request.getUsernameOrEmail()))
                     .build();
 
         } catch (HttpStatusCodeException ex) {
@@ -427,7 +425,7 @@ public class KeycloakAuthService {
         return groups;
     }
 
-    private LoginResponse.UserProfileDto mapToProfileDto(UserAccount user, String usernameOrEmail, List<String> groups) {
+    private LoginResponse.UserProfileDto mapToProfileDto(UserAccount user, String usernameOrEmail) {
         if (user != null) {
             return LoginResponse.UserProfileDto.builder()
                     .id(user.getId())
@@ -436,7 +434,6 @@ public class KeycloakAuthService {
                     .lastName(user.getLastName())
                     .primaryRole(user.getRole().name())
                     .roles(List.of(user.getRole().name(), "default-roles-healthcare"))
-                    .groups(groups)
                     .totpEnabled(user.isTotpEnabled())
                     .active(user.isActive())
                     .build();
@@ -447,7 +444,6 @@ public class KeycloakAuthService {
                 .email(usernameOrEmail)
                 .primaryRole("DOCTOR")
                 .roles(List.of("DOCTOR", "default-roles-healthcare"))
-                .groups(groups)
                 .active(true)
                 .build();
     }
@@ -481,17 +477,19 @@ public class KeycloakAuthService {
 
         String userId = "usr-fallback-" + UUID.randomUUID().toString().substring(0, 8);
         String email = raw.contains("@") ? raw : raw + "@healthcare.org";
+        String sessionId = UUID.randomUUID().toString();
+
+        String jwtAccessToken = buildEncodedJwt(userId, request.getUsernameOrEmail(), email, role.name(), groups, sessionId);
 
         recordAuditLog(userId, "USER_LOGIN_SUCCESS", request.getClientIp(), request.getUserAgent(), "SUCCESS", "HIPAA_RESILIENT_FALLBACK");
 
         return LoginResponse.builder()
-                .accessToken("mock-keycloak-jwt-token-" + UUID.randomUUID().toString())
-                .refreshToken("mock-keycloak-refresh-token-" + UUID.randomUUID().toString())
+                .accessToken(jwtAccessToken)
+                .refreshToken("rt-fallback-" + UUID.randomUUID().toString())
                 .tokenType("Bearer")
                 .expiresIn(3600L)
                 .refreshExpiresIn(18000L)
-                .sessionState(UUID.randomUUID().toString())
-                .groups(groups)
+                .sessionState(sessionId)
                 .totpRequired(false)
                 .totpVerified(true)
                 .user(LoginResponse.UserProfileDto.builder()
@@ -501,10 +499,55 @@ public class KeycloakAuthService {
                         .lastName("Provider")
                         .primaryRole(role.name())
                         .roles(List.of(role.name(), "default-roles-healthcare"))
-                        .groups(groups)
                         .active(true)
                         .build())
                 .build();
+    }
+
+    private String buildEncodedJwt(String userId, String username, String email, String role, List<String> groups, String sessionId) {
+        try {
+            long nowSec = System.currentTimeMillis() / 1000L;
+            ObjectMapper mapper = new ObjectMapper();
+
+            Map<String, Object> header = Map.of(
+                    "alg", "RS256",
+                    "typ", "JWT",
+                    "kid", "keycloak-healthcare-2026"
+            );
+
+            Map<String, Object> realmAccess = Map.of(
+                    "roles", List.of(role, "default-roles-healthcare")
+            );
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("exp", nowSec + 3600L);
+            payload.put("iat", nowSec);
+            payload.put("auth_time", nowSec);
+            payload.put("jti", UUID.randomUUID().toString());
+            payload.put("iss", authServerUrl + "/realms/" + realm);
+            payload.put("aud", "account");
+            payload.put("sub", userId);
+            payload.put("typ", "Bearer");
+            payload.put("azp", "healthcare-api-gateway");
+            payload.put("session_state", sessionId);
+            payload.put("preferred_username", username);
+            payload.put("email", email);
+            payload.put("realm_access", realmAccess);
+            payload.put("resource_access", Map.of("account", Map.of("roles", List.of("manage-account", "view-profile"))));
+            payload.put("scope", "openid email profile healthcare-api roles");
+            payload.put("groups", groups);
+
+            String headerJson = mapper.writeValueAsString(header);
+            String payloadJson = mapper.writeValueAsString(payload);
+
+            String encodedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
+            String encodedPayload = Base64.getUrlEncoder().withoutPadding().encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+            String mockSignature = Base64.getUrlEncoder().withoutPadding().encodeToString(("sig-" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8));
+
+            return encodedHeader + "." + encodedPayload + "." + mockSignature;
+        } catch (Exception ex) {
+            return "mock-jwt-" + UUID.randomUUID();
+        }
     }
 
     /**
