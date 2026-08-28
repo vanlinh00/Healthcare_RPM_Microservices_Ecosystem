@@ -23,6 +23,30 @@
   "roles": {
     "realm": [
       {
+        "id": "role-doctor-reader-id",
+        "name": "Doctor-Reader",
+        "description": "Clinical practitioner with read-only clearance for medical documents (document:read PERMIT, document:edit DENY)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": ["LEVEL_2_READER"],
+          "department": ["CLINICAL_MEDICINE"]
+        }
+      },
+      {
+        "id": "role-doctor-editor-id",
+        "name": "Doctor-Editor",
+        "description": "Clinical attending physician with full document authoring and edit clearance (document:read PERMIT, document:edit PERMIT)",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "healthcare-realm",
+        "attributes": {
+          "clearance_level": ["LEVEL_3_EDITOR"],
+          "department": ["CLINICAL_MEDICINE"]
+        }
+      },
+      {
         "id": "role-patient-id",
         "name": "PATIENT",
         "description": "Patient user with self-telemetry and personal medical records access",
@@ -30,12 +54,8 @@
         "clientRole": false,
         "containerId": "healthcare-realm",
         "attributes": {
-          "clearance_level": [
-            "LEVEL_1"
-          ],
-          "department": [
-            "PATIENT_PORTAL"
-          ]
+          "clearance_level": ["LEVEL_1"],
+          "department": ["PATIENT_PORTAL"]
         }
       },
       {
@@ -46,15 +66,9 @@
         "clientRole": false,
         "containerId": "healthcare-realm",
         "attributes": {
-          "clearance_level": [
-            "LEVEL_3"
-          ],
-          "dea_prescribing_active": [
-            "true"
-          ],
-          "department": [
-            "CLINICAL_MEDICINE"
-          ]
+          "clearance_level": ["LEVEL_3"],
+          "dea_prescribing_active": ["true"],
+          "department": ["CLINICAL_MEDICINE"]
         }
       },
       {
@@ -65,12 +79,8 @@
         "clientRole": false,
         "containerId": "healthcare-realm",
         "attributes": {
-          "clearance_level": [
-            "LEVEL_2"
-          ],
-          "department": [
-            "TRIAGE_RPM"
-          ]
+          "clearance_level": ["LEVEL_2"],
+          "department": ["TRIAGE_RPM"]
         }
       },
       {
@@ -81,15 +91,9 @@
         "clientRole": false,
         "containerId": "healthcare-realm",
         "attributes": {
-          "clearance_level": [
-            "LEVEL_2"
-          ],
-          "license_verified": [
-            "true"
-          ],
-          "department": [
-            "PHARMACY_FULFILLMENT"
-          ]
+          "clearance_level": ["LEVEL_2"],
+          "license_verified": ["true"],
+          "department": ["PHARMACY_FULFILLMENT"]
         }
       },
       {
@@ -100,12 +104,8 @@
         "clientRole": false,
         "containerId": "healthcare-realm",
         "attributes": {
-          "clearance_level": [
-            "LEVEL_2"
-          ],
-          "department": [
-            "PATHOLOGY_LAB"
-          ]
+          "clearance_level": ["LEVEL_2"],
+          "department": ["PATHOLOGY_LAB"]
         }
       },
       {
@@ -116,12 +116,8 @@
         "clientRole": false,
         "containerId": "healthcare-realm",
         "attributes": {
-          "clearance_level": [
-            "LEVEL_4_ROOT"
-          ],
-          "hipaa_officer": [
-            "true"
-          ]
+          "clearance_level": ["LEVEL_4_ROOT"],
+          "hipaa_officer": ["true"]
         }
       },
       {
@@ -139,22 +135,42 @@
           ]
         },
         "attributes": {
-          "clearance_level": [
-            "LEVEL_4_EXECUTIVE"
-          ],
-          "executive_board": [
-            "true"
-          ]
+          "clearance_level": ["LEVEL_4_EXECUTIVE"],
+          "executive_board": ["true"]
         }
       }
     ]
   },
+  "clientScopes": [
+    {
+      "id": "scope-document-read-id",
+      "name": "document:read",
+      "description": "Permission scope to read, list, and view medical documents",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Read medical documents and health records"
+      }
+    },
+    {
+      "id": "scope-document-edit-id",
+      "name": "document:edit",
+      "description": "Permission scope to create, update, and delete medical documents",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Create, modify, and delete medical documents"
+      }
+    }
+  ],
   "clients": [
     {
       "id": "client-api-gateway-id",
       "clientId": "healthcare-api-gateway",
-      "name": "Healthcare API Gateway Client",
-      "description": "Spring Cloud API Gateway & Resource Server Client with Service Account",
+      "name": "Healthcare API Gateway & Resource Server",
+      "description": "Spring Cloud API Gateway & Resource Server Client with Keycloak Authorization Services (UMA 2.0)",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "hExghH54qXgHTl3WnNJJ1nCW2dxeRBI1",
@@ -163,6 +179,7 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": true,
       "redirectUris": [
         "http://localhost:3000/*",
         "http://localhost:8080/*",
@@ -177,7 +194,134 @@
         "roles",
         "profile",
         "email"
-      ]
+      ],
+      "optionalClientScopes": [
+        "document:read",
+        "document:edit"
+      ],
+      "protocolMappers": [
+        {
+          "id": "mapper-realm-roles",
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "id": "mapper-username",
+          "name": "username-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "preferred_username",
+            "user.attribute": "username"
+          }
+        }
+      ],
+      "authorizationSettings": {
+        "allowRemoteResourceManagement": true,
+        "policyEnforcementMode": "ENFORCING",
+        "decisionStrategy": "AFFIRMATIVE",
+        "scopes": [
+          {
+            "id": "authz-scope-read",
+            "name": "document:read",
+            "displayName": "Read Document Scope"
+          },
+          {
+            "id": "authz-scope-edit",
+            "name": "document:edit",
+            "displayName": "Edit Document Scope"
+          }
+        ],
+        "resources": [
+          {
+            "name": "Medical Document Resource",
+            "ownerManagedAccess": false,
+            "displayName": "Medical Documents & EHR Records",
+            "attributes": {
+              "endpoint": ["/api/v1/documents/*"]
+            },
+            "uris": [
+              "/api/v1/documents",
+              "/api/v1/documents/*"
+            ],
+            "scopes": [
+              {
+                "name": "document:read"
+              },
+              {
+                "name": "document:edit"
+              }
+            ],
+            "type": "urn:healthcare:resource:document"
+          }
+        ],
+        "policies": [
+          {
+            "id": "policy-doctor-reader",
+            "name": "Doctor-Reader Policy",
+            "description": "Applies authorization to users possessing the Doctor-Reader realm role",
+            "type": "role",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "roles": "[{\"id\":\"role-doctor-reader-id\",\"required\":true}]"
+            }
+          },
+          {
+            "id": "policy-doctor-editor",
+            "name": "Doctor-Editor Policy",
+            "description": "Applies authorization to users possessing the Doctor-Editor realm role",
+            "type": "role",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "roles": "[{\"id\":\"role-doctor-editor-id\",\"required\":true}]"
+            }
+          },
+          {
+            "id": "perm-read-document",
+            "name": "Read Document Permission",
+            "description": "Scope-based permission: Target Scope = document:read. Applied to Doctor-Reader Policy & Doctor-Editor Policy",
+            "type": "scope",
+            "logic": "POSITIVE",
+            "decisionStrategy": "AFFIRMATIVE",
+            "config": {
+              "defaultResourceType": "urn:healthcare:resource:document",
+              "default": "true",
+              "scopes": "[\"document:read\"]",
+              "applyPolicies": "[\"Doctor-Reader Policy\",\"Doctor-Editor Policy\"]"
+            }
+          },
+          {
+            "id": "perm-edit-document",
+            "name": "Edit Document Permission",
+            "description": "Scope-based permission: Target Scope = document:edit. Applied to Doctor-Editor Policy (Doctor-Reader defaults to DENY)",
+            "type": "scope",
+            "logic": "POSITIVE",
+            "decisionStrategy": "AFFIRMATIVE",
+            "config": {
+              "defaultResourceType": "urn:healthcare:resource:document",
+              "default": "true",
+              "scopes": "[\"document:edit\"]",
+              "applyPolicies": "[\"Doctor-Editor Policy\"]"
+            }
+          }
+        ]
+      }
     },
     {
       "id": "client-web-portal-id",
@@ -217,6 +361,56 @@
     }
   ],
   "users": [
+    {
+      "id": "usr-doc-reader-01",
+      "username": "user_doctor_1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Doctor",
+      "lastName": "Reader",
+      "email": "doctor_reader@healthcare.org",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Doctor-Reader",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "department": [
+          "CLINICAL_MEDICINE"
+        ]
+      }
+    },
+    {
+      "id": "usr-doc-editor-02",
+      "username": "user_doctor_2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Doctor",
+      "lastName": "Editor",
+      "email": "doctor_editor@healthcare.org",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Doctor-Editor",
+        "default-roles-healthcare"
+      ],
+      "attributes": {
+        "department": [
+          "CLINICAL_MEDICINE"
+        ]
+      }
+    },
     {
       "id": "usr-doc-204",
       "username": "doctor_emily",
