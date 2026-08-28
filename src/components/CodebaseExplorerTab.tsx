@@ -58,7 +58,7 @@ export const CodebaseExplorerTab: React.FC = () => {
           <div>
             <h3 className="text-base font-bold text-slate-100">Enterprise Codebase &amp; Kubernetes Explorer</h3>
             <p className="text-xs text-slate-400">
-              Browse production-ready Java 21, Spring Boot 3.4 microservices, Liquibase XML migrations, Docker Compose, and Kubernetes manifests.
+              Browse production-ready Java 17, Spring Boot 3.4 microservices, Liquibase XML migrations, Docker Compose, and Kubernetes manifests.
             </p>
           </div>
         </div>

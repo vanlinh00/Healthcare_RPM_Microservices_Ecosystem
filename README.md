@@ -2,7 +2,7 @@
 
 Enterprise-grade, distributed, HIPAA-compliant microservices platform designed for real-time healthcare monitoring, clinical workflow automation, multi-role IAM, distributed appointment scheduling, and IoT emergency telemetry.
 
-Built with **Java 21**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keycloak 24**, **PostgreSQL 16**, **Redisson / Redis 7.2**, **Apache Kafka (KRaft)**, **Elasticsearch 8.17**, and a **React 18 + Vite** interactive observability dashboard.
+Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keycloak 24**, **PostgreSQL 16**, **Redisson / Redis 7.2**, **Apache Kafka (KRaft)**, **Elasticsearch 8.17**, and a **React 18 + Vite** interactive observability dashboard.
 
 ---
 
@@ -169,7 +169,7 @@ The User & IAM microservice manages authentication, authorization, Keycloak sess
 ## 🚀 Quickstart & Local Setup
 
 ### Prerequisites
-- **JDK 21** (Eclipse Temurin / OpenJDK 21)
+- **JDK 17** (Eclipse Temurin / OpenJDK 17)
 - **Maven 3.9+**
 - **Docker & Docker Compose**
 - **Node.js 20+** & **npm**

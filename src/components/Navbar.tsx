@@ -31,7 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, notific
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-white tracking-tight">Healthcare & RPM Platform</span>
                 <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                  Java 21 / Spring 3.4
+                  Java 17 / Spring 3.4
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-400">
                   HIPAA Ready

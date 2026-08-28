@@ -145,7 +145,7 @@ export const KeycloakIamTab: React.FC = () => {
           clientRole: false,
           attributes: {
             clearance_level: [newRoleClearance],
-            created_via: ['KEYCLOAK_ADMIN_CLIENT_SDK_JAVA21']
+            created_via: ['KEYCLOAK_ADMIN_CLIENT_SDK_JAVA17']
           }
         })
       });

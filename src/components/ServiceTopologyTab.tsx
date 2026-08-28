@@ -133,7 +133,7 @@ export const ServiceTopologyTab: React.FC = () => {
               </div>
               <div>
                 <h4 className="text-base font-bold text-slate-100">{selectedService.name} (`{selectedService.id}`)</h4>
-                <p className="text-xs text-slate-400 font-mono">Package: com.healthcare.{selectedService.id.replace(/-/g, '')} • Java 21 • Spring Boot 3.4</p>
+                <p className="text-xs text-slate-400 font-mono">Package: com.healthcare.{selectedService.id.replace(/-/g, '')} • Java 17 • Spring Boot 3.4</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

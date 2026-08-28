@@ -1353,7 +1353,7 @@ async function startServer() {
   // Codebase file tree and viewer endpoint so users can browse any Java or Config file
   app.get('/api/codebase/files', (req, res) => {
     const filesList: Array<{ path: string; category: string; description: string }> = [
-      { path: 'pom.xml', category: 'Root / Maven', description: 'Parent Maven POM with Java 21 & Spring Boot 3.4 dependency management' },
+      { path: 'pom.xml', category: 'Root / Maven', description: 'Parent Maven POM with Java 17 & Spring Boot 3.4 dependency management' },
       { path: 'docker-compose.yml', category: 'Infrastructure', description: 'Multi-container setup (Postgres, Kafka KRaft, Redis, Elasticsearch, Keycloak, Prometheus)' },
       { path: 'init-postgres-databases.sql', category: 'Infrastructure', description: 'Initializes databases for all 6 transactional persistence stores' },
       { path: 'keycloak-realm-export.json', category: 'Security / IAM', description: 'Keycloak 24 Realm export with 6 RBAC roles, OAuth2 clients & policies' },

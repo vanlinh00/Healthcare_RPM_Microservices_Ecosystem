@@ -29,7 +29,7 @@ export function App() {
 
       <footer className="border-t border-slate-800/80 bg-slate-950 py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Healthcare &amp; RPM Microservices Ecosystem • Java 21 / Spring Boot 3.4 / Keycloak 24</span>
+          <span>Healthcare &amp; RPM Microservices Ecosystem • Java 17 / Spring Boot 3.4 / Keycloak 24</span>
           <span className="text-[11px] font-mono text-slate-400">PostgreSQL (Liquibase) • Redisson • Apache Kafka KRaft • Elasticsearch 8.17</span>
         </div>
       </footer>
