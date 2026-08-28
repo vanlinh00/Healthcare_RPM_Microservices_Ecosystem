@@ -5,7 +5,7 @@ spring:
   application:
     name: fulfillment-service
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/fulfillment_db
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/fulfillment_db
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgrespassword}
   jpa:

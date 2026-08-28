@@ -5,7 +5,7 @@ spring:
   application:
     name: care-dispatch-service
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/care_dispatch_db
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5433}/care_dispatch_db
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgrespassword}
   jpa:
