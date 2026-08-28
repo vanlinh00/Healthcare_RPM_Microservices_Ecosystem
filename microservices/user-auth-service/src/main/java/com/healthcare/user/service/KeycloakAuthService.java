@@ -7,6 +7,7 @@ import com.healthcare.user.dto.LogoutRequest;
 import com.healthcare.user.dto.RefreshTokenRequest;
 import com.healthcare.user.dto.RegisterRequest;
 import com.healthcare.user.dto.RegisterResponse;
+import com.healthcare.user.exception.KeycloakOperationException;
 import com.healthcare.user.exception.KeycloakResourceConflictException;
 import com.healthcare.user.model.AuthAuditLog;
 import com.healthcare.user.model.DoctorProfile;

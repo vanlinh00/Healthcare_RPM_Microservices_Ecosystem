@@ -53,3 +53,15 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics
+
+logging:
+  file:
+    name: debug.log
+  level:
+    root: INFO
+    com.healthcare.user: DEBUG
+    com.healthcare: DEBUG
+    org.keycloak: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
