@@ -157,7 +157,7 @@
       "description": "Spring Cloud API Gateway & Resource Server Client with Service Account",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
-      "secret": "gateway-client-secret-rpm-2026",
+      "secret": "hExghH54qXgHTl3WnNJJ1nCW2dxeRBI1",
       "bearerOnly": false,
       "publicClient": false,
       "standardFlowEnabled": true,

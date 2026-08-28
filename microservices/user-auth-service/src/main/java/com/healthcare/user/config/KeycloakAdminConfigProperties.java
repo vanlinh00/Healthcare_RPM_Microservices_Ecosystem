@@ -26,7 +26,7 @@ public class KeycloakAdminConfigProperties {
     /**
      * Client Secret for Client Credentials (Service Account) flow
      */
-    private String clientSecret = "gateway-client-secret-rpm-2026";
+    private String clientSecret = "hExghH54qXgHTl3WnNJJ1nCW2dxeRBI1";
 
     /**
      * Optional Master Realm for cross-realm admin management

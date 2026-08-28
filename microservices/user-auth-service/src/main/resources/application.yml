@@ -32,12 +32,12 @@ keycloak:
   realm: ${KEYCLOAK_REALM:healthcare-realm}
   resource: ${KEYCLOAK_CLIENT_ID:healthcare-api-gateway}
   credentials:
-    secret: ${KEYCLOAK_CLIENT_SECRET:gateway-client-secret-rpm-2026}
+    secret: ${KEYCLOAK_CLIENT_SECRET:hExghH54qXgHTl3WnNJJ1nCW2dxeRBI1}
   admin:
     server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://localhost:8080}
     realm: ${KEYCLOAK_REALM:healthcare-realm}
     client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:admin-cli}
-    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:gateway-client-secret-rpm-2026}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:hExghH54qXgHTl3WnNJJ1nCW2dxeRBI1}
     master-realm: master
     admin-username: ${KEYCLOAK_ADMIN_USER:admin}
     admin-password: ${KEYCLOAK_ADMIN_PASSWORD:adminpassword}
