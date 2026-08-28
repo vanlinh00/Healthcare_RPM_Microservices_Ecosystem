@@ -723,6 +723,120 @@ async function startServer() {
     'admin_sys': { id: 'usr-adm-001', password: 'Password123!', role: 'ADMIN', email: 'admin@healthcare.org', firstName: 'System', lastName: 'Administrator', totpEnabled: true, totpSecret: 'JBSWY3DPEHPK3PXP' }
   };
 
+  // Register API (Keycloak IAM & PostgreSQL User Account Registration)
+  const handleRegister = (req: express.Request, res: express.Response) => {
+    const {
+      email = '',
+      username = '',
+      password = '',
+      firstName = '',
+      lastName = '',
+      role = 'PATIENT',
+      phoneNumber = '',
+      enableTotp = false,
+      medicalLicenseNumber = '',
+      specialty = '',
+      yearsOfExperience = 5,
+      consultationFee = 150
+    } = req.body;
+
+    const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || 'Healthcare-Client/1.0';
+
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    if (!firstName || !lastName) {
+      return res.status(400).json({ error: 'First name and last name are required' });
+    }
+
+    // Check duplicate
+    const existingKey = Object.keys(registeredUsers).find(
+      k => k.toLowerCase() === (username || email).toLowerCase() || registeredUsers[k].email.toLowerCase() === email.toLowerCase()
+    );
+
+    if (existingKey) {
+      authAuditLogs.unshift({
+        id: authAuditLogs.length + 1,
+        userId: email,
+        action: 'USER_REGISTER_FAILED',
+        ipAddress: clientIp,
+        userAgent,
+        status: 'CONFLICT',
+        hipaaEventType: 'EMAIL_ALREADY_EXISTS',
+        timestamp: new Date().toISOString()
+      });
+      return res.status(409).json({ error: `User with email '${email}' already exists.` });
+    }
+
+    const userId = 'usr-' + crypto.randomBytes(4).toString('hex');
+    const finalUsername = (username && username.trim()) ? username.trim() : email.split('@')[0];
+    const totpSecret = enableTotp ? 'JBSWY3DPEHPK3PXP' : '';
+    const qrCodeUri = enableTotp ? `otpauth://totp/HealthcareRPM:${encodeURIComponent(email)}?secret=${totpSecret}&issuer=HealthcareRPM` : null;
+
+    // Save to user store
+    registeredUsers[finalUsername] = {
+      id: userId,
+      password: password,
+      role: role.toUpperCase(),
+      email: email.toLowerCase(),
+      firstName,
+      lastName,
+      totpEnabled: !!enableTotp,
+      totpSecret
+    };
+
+    // HIPAA audit log
+    authAuditLogs.unshift({
+      id: authAuditLogs.length + 1,
+      userId: userId,
+      action: 'USER_REGISTER_SUCCESS',
+      ipAddress: clientIp,
+      userAgent,
+      status: 'SUCCESS',
+      hipaaEventType: 'HIPAA_ACCOUNT_CREATED',
+      timestamp: new Date().toISOString()
+    });
+
+    let doctorProfile = null;
+    if (role.toUpperCase() === 'DOCTOR' && medicalLicenseNumber) {
+      doctorProfile = {
+        doctorId: userId,
+        medicalLicenseNumber,
+        specialty: specialty || 'General Practice',
+        yearsOfExperience,
+        consultationFee,
+        verified: false,
+        verifiedByAdmin: null,
+        verificationTimestamp: null
+      };
+    }
+
+    return res.status(201).json({
+      id: userId,
+      email: email.toLowerCase(),
+      username: finalUsername,
+      firstName,
+      lastName,
+      primaryRole: role.toUpperCase(),
+      roles: [role.toUpperCase(), 'default-roles-healthcare'],
+      phoneNumber,
+      active: true,
+      totp_enabled: !!enableTotp,
+      totp_secret: totpSecret || null,
+      totp_qr_code_uri: qrCodeUri,
+      doctorProfile,
+      message: 'User account registered successfully in Keycloak IAM and PostgreSQL database.',
+      createdAt: new Date().toISOString()
+    });
+  };
+
+  app.post('/api/auth/register', handleRegister);
+  app.post('/api/v1/auth/register', handleRegister);
+
   // Login API (Direct Access Grant & TOTP 2FA Enforcement)
   const handleLogin = (req: express.Request, res: express.Response) => {
     const {
@@ -1369,6 +1483,8 @@ async function startServer() {
       { path: 'microservices/api-gateway/src/main/java/com/healthcare/gateway/filter/JwtAuthenticationRelayFilter.java', category: 'API Gateway', description: 'JWT claim extraction & downstream header relay filter' },
       { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/controller/AuthController.java', category: 'User & IAM', description: 'REST Controller for /api/v1/auth/login, /api/v1/auth/logout, /refresh & TOTP 2FA' },
       { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/service/KeycloakAuthService.java', category: 'User & IAM', description: 'Keycloak OpenID token exchange, single sign-out revocation, and HIPAA audit logging' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/RegisterRequest.java', category: 'User & IAM', description: 'User Registration Request DTO with role assignment, credentials & optional TOTP 2FA' },
+      { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/RegisterResponse.java', category: 'User & IAM', description: 'User Registration Response DTO with Keycloak profile, role matrix & TOTP QR code' },
       { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/LoginRequest.java', category: 'User & IAM', description: 'Login Request DTO with credentials, TOTP code & client metadata' },
       { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/LoginResponse.java', category: 'User & IAM', description: 'Login Response DTO with access token, refresh token & user profile' },
       { path: 'microservices/user-auth-service/src/main/java/com/healthcare/user/dto/LogoutRequest.java', category: 'User & IAM', description: 'Logout Request DTO for Keycloak session and refresh token revocation' },

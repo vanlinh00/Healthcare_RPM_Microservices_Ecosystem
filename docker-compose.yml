@@ -145,6 +145,37 @@ services:
       - healthcare-network
 
   # ----------------------------------------------------
+  # Kong API Gateway (DB-less Declarative Mode)
+  # ----------------------------------------------------
+  kong:
+    image: kong:3.7-alpine
+    container_name: healthcare-kong-gateway
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_PLUGINS: bundled
+    ports:
+      - "8000:8000"   # Kong HTTP Proxy
+      - "8443:8443"   # Kong HTTPS Proxy
+      - "8001:8001"   # Kong Admin API
+      - "8444:8444"   # Kong Admin HTTPS
+    volumes:
+      - ./kong/kong.yml:/etc/kong/kong.yml:ro
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - healthcare-network
+
+  # ----------------------------------------------------
   # Prometheus (Microservice Metrics Scraper)
   # ----------------------------------------------------
   prometheus:

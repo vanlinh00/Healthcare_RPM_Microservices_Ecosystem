@@ -4,6 +4,8 @@ import com.healthcare.user.dto.LoginRequest;
 import com.healthcare.user.dto.LoginResponse;
 import com.healthcare.user.dto.LogoutRequest;
 import com.healthcare.user.dto.RefreshTokenRequest;
+import com.healthcare.user.dto.RegisterRequest;
+import com.healthcare.user.dto.RegisterResponse;
 import com.healthcare.user.model.AuthAuditLog;
 import com.healthcare.user.model.DoctorProfile;
 import com.healthcare.user.repository.AuthAuditLogRepository;
@@ -15,6 +17,7 @@ import jakarta.validation.Valid;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -45,6 +48,23 @@ public class AuthController {
     public static class TotpVerifyRequest {
         private String secret;
         private String code;
+    }
+
+    /**
+     * Register a new user in Keycloak IAM and PostgreSQL database.
+     */
+    @PostMapping("/register")
+    public ResponseEntity<RegisterResponse> register(
+            @Valid @RequestBody RegisterRequest registerRequest,
+            HttpServletRequest httpRequest) {
+
+        registerRequest.setClientIp(httpRequest.getRemoteAddr());
+        registerRequest.setUserAgent(httpRequest.getHeader("User-Agent"));
+
+        log.info("Received user registration request for email: {}, role: {}",
+                registerRequest.getEmail(), registerRequest.getRole());
+        RegisterResponse response = keycloakAuthService.register(registerRequest);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**

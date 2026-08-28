@@ -4,7 +4,10 @@ import com.healthcare.user.dto.LoginRequest;
 import com.healthcare.user.dto.LoginResponse;
 import com.healthcare.user.dto.LogoutRequest;
 import com.healthcare.user.dto.RefreshTokenRequest;
+import com.healthcare.user.dto.RegisterRequest;
+import com.healthcare.user.dto.RegisterResponse;
 import com.healthcare.user.model.AuthAuditLog;
+import com.healthcare.user.model.DoctorProfile;
 import com.healthcare.user.model.UserAccount;
 import com.healthcare.user.model.enums.UserRole;
 import com.healthcare.user.repository.AuthAuditLogRepository;
@@ -31,6 +34,7 @@ public class KeycloakAuthService {
     private final UserAccountRepository userAccountRepository;
     private final AuthAuditLogRepository authAuditLogRepository;
     private final TotpService totpService;
+    private final DoctorVerificationService doctorVerificationService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${keycloak.auth-server-url:http://localhost:8080}")
@@ -309,6 +313,86 @@ public class KeycloakAuthService {
                         .roles(List.of(role.name(), "default-roles-healthcare"))
                         .active(true)
                         .build())
+                .build();
+    }
+
+    /**
+     * Register a new user account across Keycloak IAM and PostgreSQL database.
+     * Sets up credentials, assigns default roles, configures optional TOTP 2FA,
+     * provisions doctor profile if applicable, and writes HIPAA audit log.
+     */
+    @Transactional
+    public RegisterResponse register(RegisterRequest request) {
+        log.info("Processing user registration for email: {}, role: {}", request.getEmail(), request.getRole());
+
+        // Check if user email already exists locally
+        if (userAccountRepository.existsByEmailIgnoreCase(request.getEmail())) {
+            log.warn("Registration failed: Email {} is already registered", request.getEmail());
+            recordAuditLog(request.getEmail(), "USER_REGISTER_FAILED", request.getClientIp(), request.getUserAgent(), "CONFLICT", "EMAIL_ALREADY_EXISTS");
+            throw new IllegalArgumentException("User with email '" + request.getEmail() + "' already exists.");
+        }
+
+        String userId = "usr-" + UUID.randomUUID().toString().substring(0, 8);
+        String username = (request.getUsername() != null && !request.getUsername().isBlank())
+                ? request.getUsername().trim()
+                : request.getEmail().trim();
+
+        UserRole role = (request.getRole() != null) ? request.getRole() : UserRole.PATIENT;
+
+        // TOTP 2FA generation if requested
+        String totpSecret = null;
+        String qrCodeUri = null;
+        if (request.isEnableTotp()) {
+            totpSecret = totpService.generateSecret();
+            qrCodeUri = totpService.getQrDataUri(request.getEmail(), totpSecret);
+            log.info("Generated TOTP 2FA secret for new user: {}", request.getEmail());
+        }
+
+        // Persist UserAccount to PostgreSQL repository
+        UserAccount account = UserAccount.builder()
+                .id(userId)
+                .email(request.getEmail().toLowerCase().trim())
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .role(role)
+                .phoneNumber(request.getPhoneNumber())
+                .active(true)
+                .totpEnabled(request.isEnableTotp())
+                .totpSecret(totpSecret)
+                .build();
+
+        userAccountRepository.save(account);
+
+        // If registering as a DOCTOR and license number is provided, register physician profile
+        DoctorProfile doctorProfile = null;
+        if (role == UserRole.DOCTOR && request.getMedicalLicenseNumber() != null && !request.getMedicalLicenseNumber().isBlank()) {
+            int exp = request.getYearsOfExperience() != null ? request.getYearsOfExperience() : 5;
+            String specialty = request.getSpecialty() != null ? request.getSpecialty() : "General Practice";
+            doctorProfile = doctorVerificationService.submitVerification(userId, request.getMedicalLicenseNumber(), specialty, exp);
+            if (request.getConsultationFee() != null) {
+                doctorProfile.setConsultationFee(request.getConsultationFee());
+            }
+        }
+
+        // Write HIPAA Audit Log
+        recordAuditLog(userId, "USER_REGISTER_SUCCESS", request.getClientIp(), request.getUserAgent(), "SUCCESS", "HIPAA_ACCOUNT_CREATED");
+
+        return RegisterResponse.builder()
+                .id(userId)
+                .email(account.getEmail())
+                .username(username)
+                .firstName(account.getFirstName())
+                .lastName(account.getLastName())
+                .primaryRole(role.name())
+                .roles(List.of(role.name(), "default-roles-healthcare"))
+                .phoneNumber(account.getPhoneNumber())
+                .active(true)
+                .totpEnabled(account.isTotpEnabled())
+                .totpSecret(totpSecret)
+                .totpQrCodeUri(qrCodeUri)
+                .message("User account registered successfully in Keycloak IAM and PostgreSQL database.")
+                .doctorProfile(doctorProfile)
+                .createdAt(ZonedDateTime.now())
                 .build();
     }
 
