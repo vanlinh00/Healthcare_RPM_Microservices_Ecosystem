@@ -1,5 +1,7 @@
 package com.healthcare.user.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthcare.user.config.KeycloakAdminConfigProperties;
 import com.healthcare.user.dto.LoginRequest;
 import com.healthcare.user.dto.LoginResponse;
@@ -33,6 +35,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
 import java.util.*;
 
@@ -70,7 +73,7 @@ public class KeycloakAuthService {
         log.info("Processing login attempt for user/email: {}", request.getUsernameOrEmail());
 
         // Step 1: Check if user exists in local database to verify 2FA requirements
-        Optional<UserAccount> localUserOpt = userAccountRepository.findByEmailIgnoreCase(request.getUsernameOrEmail());
+        Optional<UserAccount> localUserOpt = findLocalUserAccount(request.getUsernameOrEmail());
         
         if (localUserOpt.isPresent()) {
             UserAccount user = localUserOpt.get();
@@ -249,25 +252,105 @@ public class KeycloakAuthService {
         }
     }
 
-    private UserAccount syncUserAccount(String usernameOrEmail, Map<String, Object> tokenBody) {
-        return userAccountRepository.findByEmailIgnoreCase(usernameOrEmail)
-                .orElseGet(() -> {
-                    UserRole defaultRole = UserRole.PATIENT;
-                    if (usernameOrEmail.contains("doc") || usernameOrEmail.contains("emily")) defaultRole = UserRole.DOCTOR;
-                    else if (usernameOrEmail.contains("nurse")) defaultRole = UserRole.NURSE;
-                    else if (usernameOrEmail.contains("admin")) defaultRole = UserRole.ADMIN;
+    private Optional<UserAccount> findLocalUserAccount(String usernameOrEmail) {
+        if (usernameOrEmail == null || usernameOrEmail.trim().isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<UserAccount> opt = userAccountRepository.findByEmailIgnoreCase(usernameOrEmail.trim());
+        if (opt.isPresent()) {
+            return opt;
+        }
+        return userAccountRepository.findByEmailOrUsernamePrefix(usernameOrEmail.trim());
+    }
 
-                    UserAccount newUser = UserAccount.builder()
-                            .id("usr-" + UUID.randomUUID().toString().substring(0, 8))
-                            .email(usernameOrEmail.contains("@") ? usernameOrEmail : usernameOrEmail + "@healthcare.org")
-                            .firstName("Healthcare")
-                            .lastName("User")
-                            .role(defaultRole)
-                            .active(true)
-                            .totpEnabled(false)
-                            .build();
-                    return userAccountRepository.save(newUser);
-                });
+    private UserAccount syncUserAccount(String usernameOrEmail, Map<String, Object> tokenBody) {
+        String extractedEmail = null;
+        String keycloakUserId = null;
+        String firstName = "Healthcare";
+        String lastName = "User";
+
+        if (tokenBody != null && tokenBody.containsKey("access_token")) {
+            try {
+                String token = (String) tokenBody.get("access_token");
+                String[] parts = token.split("\\.");
+                if (parts.length >= 2) {
+                    byte[] decoded = Base64.getUrlDecoder().decode(parts[1]);
+                    String payloadJson = new String(decoded, StandardCharsets.UTF_8);
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode node = mapper.readTree(payloadJson);
+                    if (node.has("email") && !node.get("email").asText().isEmpty()) {
+                        extractedEmail = node.get("email").asText();
+                    }
+                    if (node.has("sub") && !node.get("sub").asText().isEmpty()) {
+                        keycloakUserId = node.get("sub").asText();
+                    }
+                    if (node.has("given_name") && !node.get("given_name").asText().isEmpty()) {
+                        firstName = node.get("given_name").asText();
+                    }
+                    if (node.has("family_name") && !node.get("family_name").asText().isEmpty()) {
+                        lastName = node.get("family_name").asText();
+                    }
+                }
+            } catch (Exception ex) {
+                log.debug("Could not parse JWT claims for account sync: {}", ex.getMessage());
+            }
+        }
+
+        // 1. Try finding by Keycloak Subject UUID
+        if (keycloakUserId != null) {
+            Optional<UserAccount> byId = userAccountRepository.findById(keycloakUserId);
+            if (byId.isPresent()) {
+                return byId.get();
+            }
+        }
+
+        // 2. Try finding by extracted email from JWT
+        if (extractedEmail != null) {
+            Optional<UserAccount> byExtracted = userAccountRepository.findByEmailIgnoreCase(extractedEmail);
+            if (byExtracted.isPresent()) {
+                return byExtracted.get();
+            }
+        }
+
+        // 3. Try finding by the provided usernameOrEmail (exact or prefix)
+        Optional<UserAccount> byInput = findLocalUserAccount(usernameOrEmail);
+        if (byInput.isPresent()) {
+            return byInput.get();
+        }
+
+        // 4. If still not found, determine the definitive unique email to insert
+        String effectiveEmail = extractedEmail != null ? extractedEmail :
+                (usernameOrEmail.contains("@") ? usernameOrEmail : usernameOrEmail + "@healthcare.org");
+
+        // Double check against definitive email to guard against constraint violation
+        Optional<UserAccount> byDefinitive = userAccountRepository.findByEmailIgnoreCase(effectiveEmail);
+        if (byDefinitive.isPresent()) {
+            return byDefinitive.get();
+        }
+
+        UserRole defaultRole = UserRole.PATIENT;
+        String raw = effectiveEmail.toLowerCase();
+        if (raw.contains("doc") || raw.contains("emily")) defaultRole = UserRole.DOCTOR;
+        else if (raw.contains("nurse") || raw.contains("sarah")) defaultRole = UserRole.NURSE;
+        else if (raw.contains("admin")) defaultRole = UserRole.ADMIN;
+
+        UserAccount newUser = UserAccount.builder()
+                .id(keycloakUserId != null ? keycloakUserId : "usr-" + UUID.randomUUID().toString().substring(0, 8))
+                .email(effectiveEmail)
+                .firstName(firstName)
+                .lastName(lastName)
+                .role(defaultRole)
+                .active(true)
+                .totpEnabled(false)
+                .build();
+
+        try {
+            return userAccountRepository.save(newUser);
+        } catch (Exception ex) {
+            log.warn("Account insertion during sync collided with existing record: {}", ex.getMessage());
+            return userAccountRepository.findByEmailIgnoreCase(effectiveEmail)
+                    .orElseGet(() -> findLocalUserAccount(usernameOrEmail).orElse(null));
+        }
     }
 
     private LoginResponse.UserProfileDto mapToProfileDto(UserAccount user, String usernameOrEmail) {
