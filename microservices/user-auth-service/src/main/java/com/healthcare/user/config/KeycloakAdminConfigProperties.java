@@ -26,7 +26,7 @@ public class KeycloakAdminConfigProperties {
     /**
      * Client Secret for Client Credentials (Service Account) flow
      */
-    private String clientSecret = "healthcare-keycloak-client-secret-2026";
+    private String clientSecret = "gateway-client-secret-rpm-2026";
 
     /**
      * Optional Master Realm for cross-realm admin management
@@ -36,12 +36,12 @@ public class KeycloakAdminConfigProperties {
     /**
      * Optional Master Admin username fallback
      */
-    private String adminUsername;
+    private String adminUsername = "admin";
 
     /**
      * Optional Master Admin password fallback
      */
-    private String adminPassword;
+    private String adminPassword = "adminpassword";
 
     /**
      * Connection pool size
