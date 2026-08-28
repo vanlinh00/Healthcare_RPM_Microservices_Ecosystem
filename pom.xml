@@ -14,7 +14,6 @@
 
     <modules>
         <module>microservices/service-registry</module>
-        <module>microservices/api-gateway</module>
         <module>microservices/user-auth-service</module>
         <module>microservices/appointment-order-service</module>
         <module>microservices/care-dispatch-service</module>

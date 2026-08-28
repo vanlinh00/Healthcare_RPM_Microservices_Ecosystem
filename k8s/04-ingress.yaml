@@ -4,11 +4,8 @@ metadata:
   name: healthcare-api-ingress
   namespace: healthcare-rpm
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/websocket-services: "tracking-service"
+    kubernetes.io/ingress.class: "kong"
+    konghq.com/plugins: "cors, rate-limiting, correlation-id, prometheus"
 spec:
   rules:
     - host: api.healthcare-rpm.internal
@@ -18,6 +15,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: api-gateway
+                name: kong-gateway
                 port:
-                  number: 8080
+                  number: 8000
+

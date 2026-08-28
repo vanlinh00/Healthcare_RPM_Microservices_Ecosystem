@@ -46,40 +46,90 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api-gateway
+  name: kong-gateway
   namespace: healthcare-rpm
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: api-gateway
+      app: kong-gateway
   template:
     metadata:
       labels:
-        app: api-gateway
+        app: kong-gateway
     spec:
       containers:
-        - name: api-gateway
-          image: healthcare/api-gateway:1.0.0
+        - name: kong
+          image: kong:3.7-alpine
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: /etc/kong/kong.yml
+            - name: KONG_PROXY_ACCESS_LOG
+              value: /dev/stdout
+            - name: KONG_ADMIN_ACCESS_LOG
+              value: /dev/stdout
+            - name: KONG_PROXY_ERROR_LOG
+              value: /dev/stderr
+            - name: KONG_ADMIN_ERROR_LOG
+              value: /dev/stderr
+            - name: KONG_ADMIN_LISTEN
+              value: 0.0.0.0:8001
+            - name: KONG_PROXY_LISTEN
+              value: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+            - name: KONG_PLUGINS
+              value: bundled
           ports:
-            - containerPort: 8080
-          envFrom:
-            - configMapRef:
-                name: healthcare-global-config
-            - secretRef:
-                name: healthcare-secrets
+            - name: proxy
+              containerPort: 8000
+            - name: proxy-ssl
+              containerPort: 8443
+            - name: admin
+              containerPort: 8001
+            - name: admin-ssl
+              containerPort: 8444
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: kong-config-volume
+              mountPath: /etc/kong/kong.yml
+              subPath: kong.yml
+              readOnly: true
+      volumes:
+        - name: kong-config-volume
+          configMap:
+            name: kong-declarative-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: api-gateway
+  name: kong-gateway
   namespace: healthcare-rpm
 spec:
+  type: LoadBalancer
   ports:
-    - port: 8080
-      name: http
+    - name: proxy
+      port: 8000
+      targetPort: 8000
+    - name: proxy-ssl
+      port: 8443
+      targetPort: 8443
+    - name: admin
+      port: 8001
+      targetPort: 8001
   selector:
-    app: api-gateway
+    app: kong-gateway
 ---
 apiVersion: apps/v1
 kind: Deployment

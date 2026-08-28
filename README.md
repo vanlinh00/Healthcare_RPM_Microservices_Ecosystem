@@ -10,13 +10,13 @@ Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keyclo
 
 ```
                                  ┌─────────────────────────┐
-                                 │  React 18 Observability  │
-                                 │    Dashboard (Port 3000)│
+                                 │   Frontend / Client     │
+                                 │   (Web, Mobile, REST)   │
                                  └────────────┬────────────┘
                                               │
                       ┌───────────────────────┴───────────────────────┐
-                      │    Spring Cloud API Gateway (Port 8080)        │
-                      │  (Netty, Route Predicates, JWT Relay Filters)  │
+                      │      Kong API Gateway (Ports 8000 / 8001)     │
+                      │  (DB-less Declarative Mode, CORS, Rate Limit)  │
                       └───────┬───────────────────────────────┬───────┘
                               │                               │
         ┌─────────────────────┼───────────────────────────────┼─────────────────────┐
@@ -46,8 +46,8 @@ Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keyclo
 
 | Service Name | Port | Primary Responsibilities & Technologies |
 | :--- | :--- | :--- |
+| **`kong-gateway`** | `8000 / 8001` | Cloud-Native Kong API Gateway (DB-less declarative mode), CORS, Rate Limiting (300 req/min), Correlation ID, Prometheus metrics. |
 | **`service-registry`** | `8761` | Netflix Eureka Discovery Server with dual-zone heartbeat tracking and instance failover. |
-| **`api-gateway`** | `8080` | Spring Cloud Gateway (Reactive Netty), `JwtAuthenticationRelayFilter`, CORS headers, rate limiting. |
 | **`user-auth-service`** | `8081` | Keycloak 24 OIDC integration, Direct Access Grant, 6 RBAC roles, TOTP 2FA, HIPAA audit logging. |
 | **`appointment-order-service`** | `8082` | Saga State Machine (Orchestrator), Redisson distributed lock (`RLock`), Transactional Outbox, Strategy copay pricing. |
 | **`care-dispatch-service`** | `8083` | Weighted responder scoring algorithm (Proximity 40%, Specialty 30%, Workload 20%, Rating 10%). |
@@ -217,8 +217,9 @@ java -jar microservices/user-auth-service/target/user-auth-service-1.0.0-SNAPSHO
 # 3. Appointment & Order Service
 java -jar microservices/appointment-order-service/target/appointment-order-service-1.0.0-SNAPSHOT.jar
 
-# 4. API Gateway
-java -jar microservices/api-gateway/target/api-gateway-1.0.0-SNAPSHOT.jar
+# 4. Kong API Gateway
+# Managed via Docker Compose (Port 8000 Proxy / 8001 Admin)
+docker compose up -d kong
 ```
 
 ### Step 4: Run the Observability & Interactive Console UI
