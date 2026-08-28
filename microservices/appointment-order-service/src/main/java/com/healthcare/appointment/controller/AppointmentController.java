@@ -46,9 +46,9 @@ public class AppointmentController {
 
     @GetMapping("/pricing/calculate")
     public ResponseEntity<Map<String, Object>> calculatePricing(
-            @RequestParam String strategy,
-            @RequestParam BigDecimal baseFee,
-            @RequestParam double coverage) {
+            @RequestParam("strategy") String strategy,
+            @RequestParam("baseFee") BigDecimal baseFee,
+            @RequestParam("coverage") double coverage) {
 
         BigDecimal copay = pricingContext.calculateCopay(strategy, baseFee, coverage);
         return ResponseEntity.ok(Map.of(

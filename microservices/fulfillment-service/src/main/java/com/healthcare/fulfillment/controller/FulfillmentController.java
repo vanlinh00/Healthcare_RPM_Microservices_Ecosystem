@@ -15,9 +15,9 @@ public class FulfillmentController {
 
     @PostMapping("/digital-pod")
     public ResponseEntity<DigitalPodService.ProofOfDeliveryReceipt> issueProofOfDelivery(
-            @RequestParam String prescriptionId,
-            @RequestParam String patientId,
-            @RequestParam String recipientName) {
+            @RequestParam("prescriptionId") String prescriptionId,
+            @RequestParam("patientId") String patientId,
+            @RequestParam("recipientName") String recipientName) {
 
         DigitalPodService.ProofOfDeliveryReceipt pod = digitalPodService.generateProofOfDelivery(
                 prescriptionId, patientId, recipientName
@@ -27,12 +27,12 @@ public class FulfillmentController {
 
     @PostMapping("/cold-chain/telemetry")
     public ResponseEntity<SampleTransitRecord> logColdChain(
-            @RequestParam String recordId,
-            @RequestParam String sampleType,
-            @RequestParam String patientId,
-            @RequestParam double temperature,
-            @RequestParam double minTemp,
-            @RequestParam double maxTemp) {
+            @RequestParam("recordId") String recordId,
+            @RequestParam("sampleType") String sampleType,
+            @RequestParam("patientId") String patientId,
+            @RequestParam("temperature") double temperature,
+            @RequestParam("minTemp") double minTemp,
+            @RequestParam("maxTemp") double maxTemp) {
 
         SampleTransitRecord record = digitalPodService.logColdChainTelemetry(
                 recordId, sampleType, patientId, temperature, minTemp, maxTemp

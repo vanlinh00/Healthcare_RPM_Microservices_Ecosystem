@@ -41,9 +41,9 @@ public class DispatchController {
 
     @PostMapping("/emergency-code-blue")
     public ResponseEntity<EmergencyDispatchTask> triggerEmergencyCodeBlue(
-            @RequestParam String patientId,
-            @RequestParam double lat,
-            @RequestParam double lon) {
+            @RequestParam("patientId") String patientId,
+            @RequestParam("lat") double lat,
+            @RequestParam("lon") double lon) {
 
         EmergencyDispatchTask task = EmergencyDispatchTask.builder()
                 .id("EMG-" + UUID.randomUUID().toString().substring(0, 8))

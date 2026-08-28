@@ -43,7 +43,7 @@ public class RolePermissionController {
      */
     @GetMapping("/roles")
     public ResponseEntity<List<RoleResponseDTO>> getRealmRoles(
-            @RequestParam(required = false) String query) {
+            @RequestParam(name = "query", required = false) String query) {
         if (query != null && !query.isBlank()) {
             return ResponseEntity.ok(rolePermissionService.searchRoles(query, false, null));
         }
@@ -55,8 +55,8 @@ public class RolePermissionController {
      */
     @GetMapping("/roles/client/{clientId}")
     public ResponseEntity<List<RoleResponseDTO>> getClientRoles(
-            @PathVariable String clientId,
-            @RequestParam(required = false) String query) {
+            @PathVariable("clientId") String clientId,
+            @RequestParam(name = "query", required = false) String query) {
         if (query != null && !query.isBlank()) {
             return ResponseEntity.ok(rolePermissionService.searchRoles(query, true, clientId));
         }
@@ -68,9 +68,9 @@ public class RolePermissionController {
      */
     @GetMapping("/roles/{roleName}")
     public ResponseEntity<RoleResponseDTO> getRoleByName(
-            @PathVariable String roleName,
-            @RequestParam(defaultValue = "false") boolean clientRole,
-            @RequestParam(required = false) String clientId) {
+            @PathVariable("roleName") String roleName,
+            @RequestParam(name = "clientRole", defaultValue = "false") boolean clientRole,
+            @RequestParam(name = "clientId", required = false) String clientId) {
         return ResponseEntity.ok(rolePermissionService.getRoleByName(roleName, clientRole, clientId));
     }
 
@@ -79,7 +79,7 @@ public class RolePermissionController {
      */
     @PutMapping("/roles/{roleName}")
     public ResponseEntity<RoleResponseDTO> updateRole(
-            @PathVariable String roleName,
+            @PathVariable("roleName") String roleName,
             @Valid @RequestBody RoleRequestDTO request) {
         log.info("REST: Request to update role '{}'", roleName);
         return ResponseEntity.ok(rolePermissionService.updateRole(roleName, request));
@@ -90,9 +90,9 @@ public class RolePermissionController {
      */
     @DeleteMapping("/roles/{roleName}")
     public ResponseEntity<Map<String, String>> deleteRole(
-            @PathVariable String roleName,
-            @RequestParam(defaultValue = "false") boolean clientRole,
-            @RequestParam(required = false) String clientId) {
+            @PathVariable("roleName") String roleName,
+            @RequestParam(name = "clientRole", defaultValue = "false") boolean clientRole,
+            @RequestParam(name = "clientId", required = false) String clientId) {
         log.info("REST: Request to delete role '{}'", roleName);
         rolePermissionService.deleteRole(roleName, clientRole, clientId);
         return ResponseEntity.ok(Map.of(
@@ -110,10 +110,10 @@ public class RolePermissionController {
      */
     @PostMapping("/roles/{roleName}/composites")
     public ResponseEntity<RoleResponseDTO> addSubRolesToComposite(
-            @PathVariable String roleName,
+            @PathVariable("roleName") String roleName,
             @RequestBody List<String> subRoleNames,
-            @RequestParam(defaultValue = "false") boolean clientRole,
-            @RequestParam(required = false) String clientId) {
+            @RequestParam(name = "clientRole", defaultValue = "false") boolean clientRole,
+            @RequestParam(name = "clientId", required = false) String clientId) {
         log.info("REST: Adding sub-roles {} to parent role '{}'", subRoleNames, roleName);
         RoleResponseDTO updatedRole = rolePermissionService.addSubRolesToComposite(roleName, subRoleNames, clientRole, clientId);
         return ResponseEntity.ok(updatedRole);
@@ -124,10 +124,10 @@ public class RolePermissionController {
      */
     @DeleteMapping("/roles/{roleName}/composites")
     public ResponseEntity<RoleResponseDTO> removeSubRolesFromComposite(
-            @PathVariable String roleName,
+            @PathVariable("roleName") String roleName,
             @RequestBody List<String> subRoleNames,
-            @RequestParam(defaultValue = "false") boolean clientRole,
-            @RequestParam(required = false) String clientId) {
+            @RequestParam(name = "clientRole", defaultValue = "false") boolean clientRole,
+            @RequestParam(name = "clientId", required = false) String clientId) {
         log.info("REST: Removing sub-roles {} from parent role '{}'", subRoleNames, roleName);
         RoleResponseDTO updatedRole = rolePermissionService.removeSubRolesFromComposite(roleName, subRoleNames, clientRole, clientId);
         return ResponseEntity.ok(updatedRole);
@@ -197,7 +197,7 @@ public class RolePermissionController {
      * Permission Auditing: Retrieve direct, client, and composite effective roles for a user.
      */
     @GetMapping("/mappings/users/{userId}/effective")
-    public ResponseEntity<EffectiveUserPermissionsDTO> getEffectiveUserPermissions(@PathVariable String userId) {
+    public ResponseEntity<EffectiveUserPermissionsDTO> getEffectiveUserPermissions(@PathVariable("userId") String userId) {
         log.info("REST: Auditing effective permissions for user '{}'", userId);
         return ResponseEntity.ok(rolePermissionService.getEffectiveUserPermissions(userId));
     }

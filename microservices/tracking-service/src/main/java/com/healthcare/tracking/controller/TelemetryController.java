@@ -57,8 +57,8 @@ public class TelemetryController {
 
     @GetMapping("/search/medical-records")
     public ResponseEntity<ElasticsearchMedicalSearchService.SearchResultStats> searchMedicalRecords(
-            @RequestParam(required = false) String query,
-            @RequestParam(required = false) String anomalyFilter) {
+            @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "anomalyFilter", required = false) String anomalyFilter) {
 
         return ResponseEntity.ok(searchService.searchMedicalRecordsAndAnomalies(query, anomalyFilter));
     }

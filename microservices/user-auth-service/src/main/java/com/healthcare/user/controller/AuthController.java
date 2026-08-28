@@ -174,7 +174,7 @@ public class AuthController {
     @PostMapping("/doctor/verify-license")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<DoctorProfile> verifyDoctorLicense(
-            @RequestParam String doctorId,
+            @RequestParam("doctorId") String doctorId,
             @AuthenticationPrincipal Jwt jwt) {
         String adminId = jwt.getSubject();
         return doctorVerificationService.verifyDoctor(doctorId, adminId)
