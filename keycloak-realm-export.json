@@ -228,6 +228,20 @@
             "claim.name": "preferred_username",
             "user.attribute": "username"
           }
+        },
+        {
+          "id": "mapper-group-membership",
+          "name": "group-membership-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
         }
       ],
       "authorizationSettings": {
@@ -579,6 +593,23 @@
     }
   ],
   "groups": [
+    {
+      "id": "grp-doctors-writers",
+      "name": "Doctors-Writers",
+      "path": "/Doctors-Writers",
+      "realmRoles": [
+        "Doctor-Editor",
+        "DOCTOR"
+      ]
+    },
+    {
+      "id": "grp-doctors-readers",
+      "name": "Doctors-Readers",
+      "path": "/Doctors-Readers",
+      "realmRoles": [
+        "Doctor-Reader"
+      ]
+    },
     {
       "id": "grp-clinical-staff",
       "name": "Clinical Care Team",

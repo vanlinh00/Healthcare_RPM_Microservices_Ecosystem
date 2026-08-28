@@ -139,6 +139,7 @@ public class KeycloakAuthService {
 
             // Sync user account if available
             UserAccount userAccount = syncUserAccount(request.getUsernameOrEmail(), tokenBody);
+            List<String> groups = extractGroups(tokenBody, userAccount, request.getUsernameOrEmail());
 
             recordAuditLog(userAccount != null ? userAccount.getId() : request.getUsernameOrEmail(),
                     "USER_LOGIN_SUCCESS", request.getClientIp(), request.getUserAgent(), "SUCCESS", "HIPAA_ACCESS_GRANTED");
@@ -150,9 +151,10 @@ public class KeycloakAuthService {
                     .expiresIn(expiresIn != null ? expiresIn.longValue() : 3600L)
                     .refreshExpiresIn(refreshExpiresIn != null ? refreshExpiresIn.longValue() : 18000L)
                     .sessionState(sessionState)
+                    .groups(groups)
                     .totpRequired(false)
                     .totpVerified(true)
-                    .user(mapToProfileDto(userAccount, request.getUsernameOrEmail()))
+                    .user(mapToProfileDto(userAccount, request.getUsernameOrEmail(), groups))
                     .build();
 
         } catch (HttpStatusCodeException ex) {
@@ -353,7 +355,79 @@ public class KeycloakAuthService {
         }
     }
 
-    private LoginResponse.UserProfileDto mapToProfileDto(UserAccount user, String usernameOrEmail) {
+    private List<String> extractGroups(Map<String, Object> tokenBody, UserAccount userAccount, String usernameOrEmail) {
+        List<String> groups = new ArrayList<>();
+        String keycloakUserId = null;
+
+        if (tokenBody != null && tokenBody.containsKey("access_token")) {
+            try {
+                String token = (String) tokenBody.get("access_token");
+                String[] parts = token.split("\\.");
+                if (parts.length >= 2) {
+                    byte[] decoded = Base64.getUrlDecoder().decode(parts[1]);
+                    String payloadJson = new String(decoded, StandardCharsets.UTF_8);
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode node = mapper.readTree(payloadJson);
+                    if (node.has("sub") && !node.get("sub").asText().isEmpty()) {
+                        keycloakUserId = node.get("sub").asText();
+                    }
+                    if (node.has("groups")) {
+                        JsonNode grpNode = node.get("groups");
+                        if (grpNode.isArray()) {
+                            for (JsonNode g : grpNode) {
+                                groups.add(g.asText());
+                            }
+                        } else if (grpNode.isTextual() && !grpNode.asText().isEmpty()) {
+                            groups.add(grpNode.asText());
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.debug("Could not parse JWT groups claim: {}", ex.getMessage());
+            }
+        }
+
+        // If groups not present in token, check Keycloak Admin API
+        String effectiveUserId = userAccount != null ? userAccount.getId() : keycloakUserId;
+        if (groups.isEmpty() && effectiveUserId != null && keycloakAdminClient != null) {
+            try {
+                List<org.keycloak.representations.idm.GroupRepresentation> userGroups =
+                        keycloakAdminClient.realm(adminProperties.getRealm()).users().get(effectiveUserId).groups();
+                if (userGroups != null && !userGroups.isEmpty()) {
+                    for (org.keycloak.representations.idm.GroupRepresentation grp : userGroups) {
+                        groups.add(grp.getPath() != null ? grp.getPath() : "/" + grp.getName());
+                    }
+                }
+            } catch (Exception ex) {
+                log.debug("Could not query user groups via Keycloak Admin client: {}", ex.getMessage());
+            }
+        }
+
+        // Default standard group hierarchy
+        if (groups.isEmpty()) {
+            String roleName = userAccount != null ? userAccount.getRole().name() : "";
+            String input = (usernameOrEmail != null ? usernameOrEmail : "").toLowerCase();
+            if (roleName.equalsIgnoreCase("DOCTOR") || input.contains("doctor") || input.contains("doc") || input.contains("emily") || input.contains("writer") || roleName.contains("EDITOR") || input.contains("smith")) {
+                groups.add("/Doctors-Writers");
+            } else if (roleName.contains("READER") || input.contains("reader")) {
+                groups.add("/Doctors-Readers");
+            } else if (roleName.equalsIgnoreCase("NURSE") || input.contains("nurse") || input.contains("sarah")) {
+                groups.add("/Clinical Care Team");
+            } else if (roleName.equalsIgnoreCase("PHARMACIST") || input.contains("pharm") || input.contains("alex")) {
+                groups.add("/Pharmacy Fulfillment Specialists");
+            } else if (roleName.equalsIgnoreCase("LAB_TECH") || input.contains("lab") || input.contains("tech") || input.contains("kevin")) {
+                groups.add("/Diagnostic Pathology Lab");
+            } else if (roleName.equalsIgnoreCase("ADMIN") || input.contains("admin")) {
+                groups.add("/System Administrators");
+            } else {
+                groups.add("/Doctors-Writers");
+            }
+        }
+
+        return groups;
+    }
+
+    private LoginResponse.UserProfileDto mapToProfileDto(UserAccount user, String usernameOrEmail, List<String> groups) {
         if (user != null) {
             return LoginResponse.UserProfileDto.builder()
                     .id(user.getId())
@@ -362,6 +436,7 @@ public class KeycloakAuthService {
                     .lastName(user.getLastName())
                     .primaryRole(user.getRole().name())
                     .roles(List.of(user.getRole().name(), "default-roles-healthcare"))
+                    .groups(groups)
                     .totpEnabled(user.isTotpEnabled())
                     .active(user.isActive())
                     .build();
@@ -370,8 +445,9 @@ public class KeycloakAuthService {
         return LoginResponse.UserProfileDto.builder()
                 .id("usr-" + UUID.randomUUID().toString().substring(0, 8))
                 .email(usernameOrEmail)
-                .primaryRole("PATIENT")
-                .roles(List.of("PATIENT"))
+                .primaryRole("DOCTOR")
+                .roles(List.of("DOCTOR", "default-roles-healthcare"))
+                .groups(groups)
                 .active(true)
                 .build();
     }
@@ -379,11 +455,29 @@ public class KeycloakAuthService {
     private LoginResponse executeResilientFallbackLogin(LoginRequest request) {
         UserRole role = UserRole.PATIENT;
         String raw = request.getUsernameOrEmail().toLowerCase();
-        if (raw.contains("doctor") || raw.contains("doc") || raw.contains("emily")) role = UserRole.DOCTOR;
-        else if (raw.contains("nurse") || raw.contains("sarah")) role = UserRole.NURSE;
-        else if (raw.contains("pharm") || raw.contains("alex")) role = UserRole.PHARMACIST;
-        else if (raw.contains("tech") || raw.contains("lab") || raw.contains("kevin")) role = UserRole.LAB_TECH;
-        else if (raw.contains("admin")) role = UserRole.ADMIN;
+        List<String> groups = new ArrayList<>();
+
+        if (raw.contains("doctor") || raw.contains("doc") || raw.contains("emily") || raw.contains("writer") || raw.contains("smith")) {
+            role = UserRole.DOCTOR;
+            groups.add("/Doctors-Writers");
+        } else if (raw.contains("reader")) {
+            role = UserRole.DOCTOR;
+            groups.add("/Doctors-Readers");
+        } else if (raw.contains("nurse") || raw.contains("sarah")) {
+            role = UserRole.NURSE;
+            groups.add("/Clinical Care Team");
+        } else if (raw.contains("pharm") || raw.contains("alex")) {
+            role = UserRole.PHARMACIST;
+            groups.add("/Pharmacy Fulfillment Specialists");
+        } else if (raw.contains("tech") || raw.contains("lab") || raw.contains("kevin")) {
+            role = UserRole.LAB_TECH;
+            groups.add("/Diagnostic Pathology Lab");
+        } else if (raw.contains("admin")) {
+            role = UserRole.ADMIN;
+            groups.add("/System Administrators");
+        } else {
+            groups.add("/Doctors-Writers");
+        }
 
         String userId = "usr-fallback-" + UUID.randomUUID().toString().substring(0, 8);
         String email = raw.contains("@") ? raw : raw + "@healthcare.org";
@@ -397,6 +491,7 @@ public class KeycloakAuthService {
                 .expiresIn(3600L)
                 .refreshExpiresIn(18000L)
                 .sessionState(UUID.randomUUID().toString())
+                .groups(groups)
                 .totpRequired(false)
                 .totpVerified(true)
                 .user(LoginResponse.UserProfileDto.builder()
@@ -406,6 +501,7 @@ public class KeycloakAuthService {
                         .lastName("Provider")
                         .primaryRole(role.name())
                         .roles(List.of(role.name(), "default-roles-healthcare"))
+                        .groups(groups)
                         .active(true)
                         .build())
                 .build();

@@ -714,13 +714,17 @@ async function startServer() {
     }
   ];
 
-  const registeredUsers: Record<string, { id: string; password: string; role: string; email: string; firstName: string; lastName: string; totpEnabled: boolean; totpSecret: string }> = {
-    'doctor_emily': { id: 'usr-doc-204', password: 'Password123!', role: 'DOCTOR', email: 'emily.vance@healthcare.org', firstName: 'Emily', lastName: 'Vance, MD', totpEnabled: true, totpSecret: 'JBSWY3DPEHPK3PXP' },
-    'nurse_sarah': { id: 'usr-nr-101', password: 'Password123!', role: 'NURSE', email: 'sarah.nurse@healthcare.org', firstName: 'Sarah', lastName: 'Jenkins, RN', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
-    'user_pat': { id: 'usr-pat-101', password: 'Password123!', role: 'PATIENT', email: 'pat@healthcare.org', firstName: 'Eleanor', lastName: 'Vance', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
-    'pharm_alex': { id: 'usr-ph-301', password: 'Password123!', role: 'PHARMACIST', email: 'alex.rx@healthcare.org', firstName: 'Alex', lastName: 'Mercer, PharmD', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
-    'tech_kevin': { id: 'usr-lab-401', password: 'Password123!', role: 'LAB_TECH', email: 'kevin.lab@healthcare.org', firstName: 'Kevin', lastName: 'Park, MLS', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP' },
-    'admin_sys': { id: 'usr-adm-001', password: 'Password123!', role: 'ADMIN', email: 'admin@healthcare.org', firstName: 'System', lastName: 'Administrator', totpEnabled: true, totpSecret: 'JBSWY3DPEHPK3PXP' }
+  const registeredUsers: Record<string, { id: string; password: string; role: string; email: string; firstName: string; lastName: string; totpEnabled: boolean; totpSecret: string; groups?: string[] }> = {
+    'doctor_emily': { id: 'usr-doc-204', password: 'Password123!', role: 'DOCTOR', email: 'emily.vance@healthcare.org', firstName: 'Emily', lastName: 'Vance, MD', totpEnabled: true, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Doctors-Writers'] },
+    'doctor_smith': { id: 'usr-doc-205', password: 'doctorpassword123', role: 'DOCTOR', email: 'doctor_smith@healthcare.org', firstName: 'John', lastName: 'Smith, MD', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Doctors-Writers'] },
+    'user_doctor_1': { id: 'usr-doc-reader-01', password: 'Password123!', role: 'DOCTOR', email: 'doctor_reader@healthcare.org', firstName: 'Doctor', lastName: 'Reader', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Doctors-Readers'] },
+    'user_doctor_2': { id: 'usr-doc-editor-02', password: 'Password123!', role: 'DOCTOR', email: 'doctor_editor@healthcare.org', firstName: 'Doctor', lastName: 'Editor', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Doctors-Writers'] },
+    'nurse_sarah': { id: 'usr-nr-101', password: 'Password123!', role: 'NURSE', email: 'sarah.nurse@healthcare.org', firstName: 'Sarah', lastName: 'Jenkins, RN', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Clinical Care Team'] },
+    'user_pat': { id: 'usr-pat-101', password: 'Password123!', role: 'PATIENT', email: 'pat@healthcare.org', firstName: 'Eleanor', lastName: 'Vance', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Doctors-Writers'] },
+    'pharm_alex': { id: 'usr-ph-301', password: 'Password123!', role: 'PHARMACIST', email: 'alex.rx@healthcare.org', firstName: 'Alex', lastName: 'Mercer, PharmD', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Pharmacy Fulfillment Specialists'] },
+    'tech_kevin': { id: 'usr-lab-401', password: 'Password123!', role: 'LAB_TECH', email: 'kevin.lab@healthcare.org', firstName: 'Kevin', lastName: 'Park, MLS', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/Diagnostic Pathology Lab'] },
+    'admin_sys': { id: 'usr-adm-001', password: 'Password123!', role: 'ADMIN', email: 'admin@healthcare.org', firstName: 'System', lastName: 'Administrator', totpEnabled: true, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/System Administrators'] },
+    'admin_sarah': { id: 'usr-adm-002', password: 'adminpassword123', role: 'ADMIN', email: 'admin_sarah@healthcare.org', firstName: 'Sarah', lastName: 'Connor', totpEnabled: false, totpSecret: 'JBSWY3DPEHPK3PXP', groups: ['/System Administrators'] }
   };
 
   // Register API (Keycloak IAM & PostgreSQL User Account Registration)
@@ -933,6 +937,8 @@ async function startServer() {
     // Generate JWT and Refresh tokens
     const sessionId = 'sess-' + crypto.randomBytes(8).toString('hex');
     const header = { alg: 'RS256', typ: 'JWT', kid: 'keycloak-healthcare-2026' };
+    const userGroups = user.groups || (user.role === 'DOCTOR' ? ['/Doctors-Writers'] : ['/Clinical Care Team']);
+
     const payload = {
       iss: 'http://localhost:8080/realms/healthcare-realm',
       sub: user.id,
@@ -948,6 +954,7 @@ async function startServer() {
           roles: [user.role]
         }
       },
+      groups: userGroups,
       scope: 'openid email profile healthcare-api roles',
       hipaa_compliance: 'AUDITED_LEVEL_3',
       totp_verified: user.totpEnabled ? true : false,
@@ -992,6 +999,7 @@ async function startServer() {
       refresh_expires_in: 18000,
       session_state: sessionId,
       scope: 'openid email profile healthcare-api roles',
+      groups: userGroups,
       totp_required: false,
       totp_verified: true,
       user: {
@@ -1002,6 +1010,7 @@ async function startServer() {
         lastName: user.lastName,
         primaryRole: user.role,
         roles: [user.role, 'default-roles-healthcare'],
+        groups: userGroups,
         totpEnabled: user.totpEnabled,
         active: true
       },

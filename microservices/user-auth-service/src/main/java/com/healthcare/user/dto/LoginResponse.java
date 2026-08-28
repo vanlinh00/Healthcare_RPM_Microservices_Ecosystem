@@ -36,6 +36,9 @@ public class LoginResponse {
 
     private String scope;
 
+    @JsonProperty("groups")
+    private List<String> groups;
+
     @JsonProperty("totp_required")
     private boolean totpRequired;
 
@@ -56,6 +59,7 @@ public class LoginResponse {
         private String lastName;
         private String primaryRole;
         private List<String> roles;
+        private List<String> groups;
         private boolean totpEnabled;
         private boolean active;
         private Map<String, Object> metadata;
