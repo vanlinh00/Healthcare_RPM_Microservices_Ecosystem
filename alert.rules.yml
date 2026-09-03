@@ -1,0 +1,117 @@
+groups:
+  - name: healthcare-microservices-alerts
+    rules:
+      # 1. Instance / Service Down
+      - alert: MicroserviceInstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform-sre
+        annotations:
+          summary: "Microservice instance {{ $labels.job }} ({{ $labels.instance }}) is down"
+          description: "Microservice {{ $labels.job }} on {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+      # 2. High HTTP 5xx Server Error Rate (> 5% of total requests over 5m)
+      - alert: HighHttp5xxErrorRate
+        expr: (sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (job) / sum(rate(http_server_requests_seconds_count[5m])) by (job)) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          team: backend-engineering
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} is experiencing {{ $value | printf \"%.2f\" }}% 5xx responses over the last 5 minutes (threshold: >5%)."
+
+      # 3. High Latency P95 (> 800ms)
+      - alert: HighResponseTimeP95
+        expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, job)) > 0.8
+        for: 3m
+        labels:
+          severity: warning
+          team: backend-engineering
+        annotations:
+          summary: "P95 response latency high on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} 95th percentile latency is {{ $value | printf \"%.3f\" }}s (threshold: >0.8s)."
+
+      # 4. JVM Heap Memory Exhaustion (> 85% used)
+      - alert: JvmHeapMemoryExhaustion
+        expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+          team: platform-sre
+        annotations:
+          summary: "JVM heap memory usage critical on {{ $labels.job }}"
+          description: "JVM heap memory usage on {{ $labels.job }} is {{ $value | printf \"%.1f\" }}% of maximum allocated heap."
+
+      # 5. JVM Garbage Collection Pause Time High
+      - alert: JvmGcPauseTimeHigh
+        expr: rate(jvm_gc_pause_seconds_sum[1m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          team: platform-sre
+        annotations:
+          summary: "High JVM GC pause duration on {{ $labels.job }}"
+          description: "JVM GC pause time is {{ $value | printf \"%.2f\" }} seconds/sec over the last minute."
+
+      # 6. HikariCP Connection Pool Exhaustion (> 90% active connections)
+      - alert: HikariCpConnectionPoolExhaustion
+        expr: (hikaricp_connections_active / hikaricp_connections_max) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          team: database-admins
+        annotations:
+          summary: "Database connection pool near exhaustion on {{ $labels.job }}"
+          description: "HikariCP active connections on {{ $labels.job }} is {{ $value | printf \"%.1f\" }}% of pool maximum."
+
+  - name: healthcare-clinical-rpm-alerts
+    rules:
+      # 7. Cold-Chain Medical Fulfillment Temperature Breach (< 2°C or > 8°C)
+      - alert: ColdChainTemperatureAnomaly
+        expr: fulfillment_coldchain_temperature_celsius < 2 or fulfillment_coldchain_temperature_celsius > 8
+        for: 30s
+        labels:
+          severity: critical
+          team: pharmacy-logistics
+          compliance: hipaa-gdp
+        annotations:
+          summary: "Cold-chain pharmaceutical delivery temperature breach detected!"
+          description: "Package {{ $labels.package_id }} in route has measured temperature {{ $value }}°C (safe range: 2°C - 8°C). Potential vaccine/biologic degradation risk."
+
+      # 8. Patient Critical Vital Sign Anomaly (Heart Rate > 140 or SpO2 < 90%)
+      - alert: PatientCriticalVitalAnomaly
+        expr: patient_telemetry_heart_rate_bpm > 140 or patient_telemetry_spo2_percent < 90
+        for: 15s
+        labels:
+          severity: emergency
+          team: emergency-clinical-care
+          code: code-blue
+        annotations:
+          summary: "Critical patient vital signs anomaly on Bed {{ $labels.bed_id }}"
+          description: "Patient {{ $labels.patient_id }} telemetry triggered critical anomaly alert: Heart Rate {{ $labels.heart_rate }} bpm, SpO2 {{ $labels.spo2 }}%."
+
+      # 9. HIPAA Security Breach: Elevated Authentication Failures (> 10 failures in 1m)
+      - alert: HipaaBruteForceAuthSpike
+        expr: rate(hipaa_security_audit_events_total{action="AUTH_FAILED"}[1m]) * 60 > 10
+        for: 1m
+        labels:
+          severity: critical
+          team: security-compliance
+          compliance: hipaa-audit
+        annotations:
+          summary: "HIPAA Security: Potential brute force / credential stuffing attack detected"
+          description: "More than 10 failed authentication attempts detected per minute on {{ $labels.job }}."
+
+      # 10. Kafka Consumer Group Lag High (> 100 unprocessed events)
+      - alert: KafkaConsumerLagHigh
+        expr: kafka_consumer_lag_records > 100
+        for: 3m
+        labels:
+          severity: warning
+          team: data-pipeline
+        annotations:
+          summary: "High Kafka consumer lag on topic {{ $labels.topic }}"
+          description: "Consumer group {{ $labels.consumergroup }} lag is {{ $value }} messages on topic {{ $labels.topic }}."

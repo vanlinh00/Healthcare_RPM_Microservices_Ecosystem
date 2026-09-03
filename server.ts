@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import crypto from 'crypto';
+import { monitoringEngine } from './src/monitoring-system';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1797,12 +1798,19 @@ async function startServer() {
       { path: 'init-postgres-databases.sql', category: 'Infrastructure', description: 'Initializes databases for all 6 transactional persistence stores' },
       { path: 'keycloak-realm-export.json', category: 'Security / IAM', description: 'Keycloak 24 Realm export with 6 RBAC roles, OAuth2 clients & policies' },
       { path: 'prometheus.yml', category: 'Observability', description: 'Prometheus metric scrape targets for all 8 microservices Actuator endpoints' },
+      { path: 'alert.rules.yml', category: 'Observability', description: 'Prometheus 10 Alerting Rules (InstanceDown, 5xx rate, P95 latency, JVM Heap, Cold-Chain & HIPAA)' },
+      { path: 'grafana/provisioning/datasources/prometheus.yml', category: 'Observability / Grafana', description: 'Grafana auto-provisioned Prometheus datasource configuration' },
+      { path: 'grafana/provisioning/dashboards/dashboards.yml', category: 'Observability / Grafana', description: 'Grafana dashboard provider configuration for microservices telemetry' },
+      { path: 'grafana/dashboards/healthcare-microservices-overview.json', category: 'Observability / Grafana', description: 'Grafana Dashboard: Microservices Health, Traffic, P95 Latency & Status Codes' },
+      { path: 'grafana/dashboards/jvm-and-infrastructure.json', category: 'Observability / Grafana', description: 'Grafana Dashboard: JVM Heap, GC Pauses, HikariCP Connection Pools & Kafka I/O' },
+      { path: 'grafana/dashboards/clinical-rpm-and-hipaa.json', category: 'Observability / Grafana', description: 'Grafana Dashboard: Clinical RPM Vitals, Cold-Chain Sensors & HIPAA Security Audits' },
       { path: 'k8s/00-namespace.yaml', category: 'Kubernetes', description: 'Kubernetes namespace declaration' },
       { path: 'k8s/01-configmaps-secrets.yaml', category: 'Kubernetes', description: 'ConfigMaps & Secrets for Spring Boot 3.4 microservices' },
       { path: 'k8s/02-infrastructure.yaml', category: 'Kubernetes', description: 'StatefulSets & Deployments for Postgres, Redis, Kafka' },
       { path: 'k8s/03-microservices-deployments.yaml', category: 'Kubernetes', description: 'Deployments & ClusterIP Services for Microservices' },
       { path: 'k8s/04-ingress.yaml', category: 'Kubernetes', description: 'Ingress routing with WebSocket support for RPM stream' },
       { path: 'k8s/05-hpa-pdb.yaml', category: 'Kubernetes', description: 'Horizontal Pod Autoscalers (HPA) and Pod Disruption Budgets (PDB)' },
+      { path: 'k8s/06-monitoring-prometheus-grafana.yaml', category: 'Kubernetes', description: 'Production K8s manifests for Prometheus & Grafana with ConfigMaps & Services' },
       { path: 'microservices/service-registry/src/main/java/com/healthcare/registry/ServiceRegistryApplication.java', category: 'Service Registry', description: 'Eureka Discovery Server main application' },
       { path: 'microservices/api-gateway/src/main/java/com/healthcare/gateway/config/SecurityConfig.java', category: 'API Gateway', description: 'Spring Cloud Gateway reactive security & JWT validation' },
       { path: 'microservices/api-gateway/src/main/java/com/healthcare/gateway/filter/JwtAuthenticationRelayFilter.java', category: 'API Gateway', description: 'JWT claim extraction & downstream header relay filter' },
@@ -1853,6 +1861,127 @@ async function startServer() {
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
+  });
+
+  // ----------------------------------------------------
+  // Prometheus & Grafana Monitoring & Observability Endpoints
+  // ----------------------------------------------------
+
+  // 1. Prometheus Scrape Endpoints (OpenMetrics standard text format)
+  app.get(['/actuator/prometheus', '/metrics'], (req, res) => {
+    res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.send(monitoringEngine.generatePrometheusMetricsText());
+  });
+
+  // 2. Monitoring System High-Level Overview
+  app.get('/api/v1/monitoring/overview', (req, res) => {
+    res.json(monitoringEngine.getOverview());
+  });
+
+  // 3. Prometheus Active Scrape Targets (Mirrors /api/v1/targets)
+  app.get('/api/v1/monitoring/prometheus/targets', (req, res) => {
+    const targets = monitoringEngine.getScrapeTargets();
+    res.json({
+      status: 'success',
+      data: {
+        activeTargets: targets.map(t => ({
+          discoveredLabels: t.labels,
+          labels: { job: t.job, instance: t.instance, ...t.labels },
+          scrapePool: t.job,
+          scrapeUrl: `http://${t.instance}${t.metricsPath}`,
+          globalUrl: `http://${t.instance}${t.metricsPath}`,
+          lastError: t.health === 'down' ? 'connection refused: service uncontactable' : '',
+          lastScrape: t.lastScrape,
+          lastScrapeDuration: t.lastDurationSeconds,
+          health: t.health,
+          description: t.description
+        })),
+        droppedTargets: []
+      }
+    });
+  });
+
+  // 4. Evaluated Alert Rules (Mirrors /api/v1/alerts & /api/v1/rules)
+  app.get('/api/v1/monitoring/prometheus/alerts', (req, res) => {
+    const alerts = monitoringEngine.getAlerts();
+    res.json({
+      status: 'success',
+      data: {
+        alerts: alerts.map(a => ({
+          labels: { alertname: a.alert, severity: a.severity, ...a.labels },
+          annotations: { summary: a.summary, description: a.description },
+          state: a.state,
+          activeAt: a.state === 'firing' ? new Date().toISOString() : undefined,
+          value: a.currentValue,
+          group: a.group
+        }))
+      }
+    });
+  });
+
+  // 5. Instant PromQL Query Simulator (Mirrors /api/v1/query)
+  app.get('/api/v1/monitoring/prometheus/query', (req, res) => {
+    const query = (req.query.query as string) || 'up';
+    res.json(monitoringEngine.executePromQuery(query));
+  });
+
+  // 6. Grafana Dashboards Catalog
+  app.get('/api/v1/monitoring/grafana/dashboards', (req, res) => {
+    const dashboardsDir = path.resolve(process.cwd(), 'grafana', 'dashboards');
+    const catalog = [
+      {
+        uid: 'healthcare-overview',
+        title: 'Healthcare & RPM Microservices Overview',
+        filename: 'healthcare-microservices-overview.json',
+        tags: ['healthcare', 'microservices', 'spring-boot', 'kong', 'prometheus'],
+        description: 'Microservice availability, Kong throughput, P95 latency distribution, and HTTP status code trends.'
+      },
+      {
+        uid: 'jvm-infrastructure',
+        title: 'JVM & Infrastructure Telemetry',
+        filename: 'jvm-and-infrastructure.json',
+        tags: ['jvm', 'micrometer', 'hikaricp', 'kafka', 'infrastructure'],
+        description: 'JVM Heap memory pools, GC pause latencies, HikariCP active/idle database connections, and Kafka consumer lag.'
+      },
+      {
+        uid: 'clinical-rpm-hipaa',
+        title: 'Clinical RPM Telemetry & HIPAA Security Audit',
+        filename: 'clinical-rpm-and-hipaa.json',
+        tags: ['clinical', 'rpm', 'telemetry', 'hipaa', 'audit', 'saga'],
+        description: 'Continuous patient vital signs (BPM/SpO2), cold-chain courier temperature bounds, and HIPAA compliance audit logs.'
+      }
+    ];
+
+    res.json(catalog);
+  });
+
+  // 7. Grafana Dashboard JSON Definition
+  app.get('/api/v1/monitoring/grafana/dashboards/:uid', (req, res) => {
+    const { uid } = req.params;
+    let filename = '';
+    if (uid === 'healthcare-overview') filename = 'healthcare-microservices-overview.json';
+    else if (uid === 'jvm-infrastructure') filename = 'jvm-and-infrastructure.json';
+    else if (uid === 'clinical-rpm-hipaa') filename = 'clinical-rpm-and-hipaa.json';
+    else filename = `${uid}.json`;
+
+    const filePath = path.resolve(process.cwd(), 'grafana', 'dashboards', filename);
+    if (fs.existsSync(filePath)) {
+      try {
+        const json = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        res.json(json);
+      } catch (e: any) {
+        res.status(500).json({ error: 'Failed to read dashboard JSON: ' + e.message });
+      }
+    } else {
+      res.status(404).json({ error: `Dashboard ${uid} not found` });
+    }
+  });
+
+  // 8. Interactive Telemetry Simulation & Fault Injection
+  app.post('/api/v1/monitoring/simulate', (req, res) => {
+    const scenario = req.body.scenario || req.body.trigger || 'reset';
+    const result = monitoringEngine.simulateScenario(scenario);
+    res.json(result);
   });
 
   // Serve OpenAPI 3.0 Raw Spec (SpringDoc /v3/api-docs mirror)

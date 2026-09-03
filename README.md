@@ -275,6 +275,78 @@ It contains:
 
 ---
 
+## 📊 Observability & Monitoring System (Prometheus & Grafana)
+
+The platform includes an enterprise-grade observability stack combining **Prometheus 2.53** and **Grafana 11.1** for real-time telemetry, JVM health analysis, clinical anomaly tracking, and HIPAA security audit monitoring.
+
+### 1. Prometheus Architecture & Scrape Configuration (`prometheus.yml`)
+Scrapes all microservices, API Gateways, and IAM providers via `15s` polling intervals:
+
+| Scrape Target | Port / Metric Path | Scraped Telemetry & Protocol |
+| :--- | :--- | :--- |
+| **`prometheus`** | `9090 /metrics` | Prometheus TSDB storage, scrape durations, and compaction metrics |
+| **`kong-gateway`** | `8001 /metrics` | HTTP requests/sec, P95/P99 latency, upstream connection pools, status codes |
+| **`keycloak-iam`** | `8080 /metrics` | Active user sessions, login successes/failures, token exchanges |
+| **`service-registry`** | `8761 /actuator/prometheus` | Eureka registered instances, lease renewal rates, heartbeat sync |
+| **`user-auth-service`** | `8081 /actuator/prometheus` | OIDC token latency, TOTP validations, HIPAA security audit events |
+| **`appointment-order-service`** | `8082 /actuator/prometheus` | Saga transitions, compensation rollbacks, Redisson `RLock` wait times |
+| **`care-dispatch-service`** | `8083 /actuator/prometheus` | Nurse dispatch scoring latency, responder assignment throughput |
+| **`fulfillment-service`** | `8084 /actuator/prometheus` | Cold-chain IoT temperatures (`2°C - 8°C`), digital POD signatures |
+| **`tracking-service`** | `8085 /actuator/prometheus` | Patient vital signs (HR, SpO2), WebSocket RPM stream counts, ES queries |
+| **`notification-service`** | `8086 /actuator/prometheus` | Code-Blue thread pool saturation, Kafka consumer lag, dispatch latency |
+
+### 2. Evaluated Alerting Rules (`alert.rules.yml`)
+Configured with 10 critical and warning alerting rules:
+- **`MicroserviceInstanceDown`**: Triggers when `up == 0` for >1 minute (Critical).
+- **`HighHttp5xxErrorRate`**: Triggers when 5xx errors exceed 5.0% over 5m window (Critical).
+- **`HighResponseTimeP95`**: Triggers when P95 HTTP latency exceeds 800ms (Warning).
+- **`JvmHeapMemoryExhaustion`**: Triggers when JVM heap exceeds 85% capacity (Warning).
+- **`JvmGarbageCollectionStall`**: Triggers when GC pause exceeds 1.5s (Warning).
+- **`HikariCpPoolSaturation`**: Triggers when active database connections reach 90% of pool (Critical).
+- **`ColdChainTemperatureAnomaly`**: Triggers when medical shipment temp is `< 2°C` or `> 8°C` (Critical).
+- **`PatientCriticalVitalAnomaly`**: Triggers Code-Blue notification if patient HR `> 140` or SpO2 `< 90%` (Emergency).
+- **`HipaaBruteForceAuthSpike`**: Triggers if failed authentications exceed 10/min (Critical).
+- **`KafkaConsumerLagHigh`**: Triggers if consumer group lag exceeds 500 records for >3m (Warning).
+
+### 3. Provisioned Grafana 11 Dashboards (`/grafana/dashboards/`)
+Dashboards are automatically mounted and pre-configured via `/grafana/provisioning/`:
+1. **`healthcare-microservices-overview.json`**:
+   - System Availability gauge (`up`) across all microservices
+   - Real-time HTTP Request Rate (RPS) per service
+   - P95 / P99 Latency Heatmaps
+   - HTTP 2xx / 4xx / 5xx Status Code distribution
+2. **`jvm-and-infrastructure.json`**:
+   - JVM Heap memory consumption vs max limit
+   - Garbage Collector (G1 / ZGC) pause durations
+   - Process & System CPU utilization percentages
+   - HikariCP Active vs Idle connection pool metrics
+   - Kafka Topic ingestion rates & consumer group lag
+3. **`clinical-rpm-and-hipaa.json`**:
+   - Continuous ICU Bed & RPM Wearable telemetry streams (HR bpm, SpO2 %)
+   - Fulfillment Cold-Chain temperature range bounds (2°C - 8°C safe zone)
+   - HIPAA Security Audit events (Auth success, Failed logins, TOTP 2FA, Google SSO)
+   - Distributed Saga transaction state tracking (Completions vs Rollbacks)
+
+### 4. Kubernetes Deployment Manifest (`k8s/06-monitoring-prometheus-grafana.yaml`)
+Includes ConfigMaps for scrape configs and alert rules, Persistent Deployments, and ClusterIP Services ready for Kubernetes cluster deployment:
+```bash
+kubectl apply -f k8s/06-monitoring-prometheus-grafana.yaml
+```
+
+### 5. Telemetry & Simulation API Endpoints
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| **`/actuator/prometheus`** | `GET` | OpenMetrics text format scrape endpoint for Prometheus |
+| **`/api/v1/monitoring/overview`** | `GET` | High-level system KPIs, target summaries, and active firing alerts |
+| **`/api/v1/monitoring/prometheus/targets`** | `GET` | Active Prometheus scrape targets, scrape intervals, and health status |
+| **`/api/v1/monitoring/prometheus/alerts`** | `GET` | Live evaluated alerting rules with status (`inactive`, `firing`) |
+| **`/api/v1/monitoring/prometheus/query`** | `GET` | PromQL query execution engine (`?query=up`) |
+| **`/api/v1/monitoring/grafana/dashboards`** | `GET` | Catalog of provisioned Grafana dashboards |
+| **`/api/v1/monitoring/grafana/dashboards/:uid`** | `GET` | Exportable Grafana dashboard JSON models |
+| **`/api/v1/monitoring/simulate`** | `POST` | Fault injection for alerts (`coldchain_breach`, `5xx_spike`, `vital_spike`, `reset`) |
+
+---
+
 ## 🚀 Quickstart & Local Setup
 
 ### Prerequisites

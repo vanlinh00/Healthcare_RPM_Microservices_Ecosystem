@@ -1101,6 +1101,156 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "7. Monitoring & Observability (Prometheus & Grafana)",
+      "item": [
+        {
+          "name": "7.1 Monitoring High-Level Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "overview"]
+            },
+            "description": "Returns system availability status, target health counts, telemetry KPIs, and active firing alerts."
+          },
+          "response": []
+        },
+        {
+          "name": "7.2 Prometheus Active Scrape Targets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/prometheus/targets",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "prometheus", "targets"]
+            },
+            "description": "Prometheus API /api/v1/targets mirror showing all 10 microservices, health, and latency."
+          },
+          "response": []
+        },
+        {
+          "name": "7.3 Prometheus Evaluated Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/prometheus/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "prometheus", "alerts"]
+            },
+            "description": "Evaluates the 10 production alerting rules (InstanceDown, 5xx rate, JVM heap, Cold-chain, HIPAA)."
+          },
+          "response": []
+        },
+        {
+          "name": "7.4 PromQL Query Simulator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/prometheus/query?query=up",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "prometheus", "query"],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "up",
+                  "description": "PromQL instant query (e.g. up, http_server_requests, jvm_memory_used_bytes, fulfillment_coldchain_temperature_celsius)"
+                }
+              ]
+            },
+            "description": "Executes PromQL instant vector queries against live microservices telemetry."
+          },
+          "response": []
+        },
+        {
+          "name": "7.5 Grafana Provisioned Dashboards Catalog",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/grafana/dashboards",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "grafana", "dashboards"]
+            },
+            "description": "Lists auto-provisioned Grafana 11 dashboards."
+          },
+          "response": []
+        },
+        {
+          "name": "7.6 Grafana Dashboard JSON (Healthcare Overview)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/grafana/dashboards/healthcare-overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "grafana", "dashboards", "healthcare-overview"]
+            },
+            "description": "Retrieves the complete Grafana dashboard definition for microservices overview."
+          },
+          "response": []
+        },
+        {
+          "name": "7.7 Grafana Dashboard JSON (Clinical RPM & HIPAA)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/grafana/dashboards/clinical-rpm-hipaa",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "grafana", "dashboards", "clinical-rpm-hipaa"]
+            },
+            "description": "Retrieves the complete Grafana dashboard definition for clinical telemetry, cold chain, and HIPAA."
+          },
+          "response": []
+        },
+        {
+          "name": "7.8 Fault Injection (Simulate Cold-Chain Breach)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenario\": \"coldchain_breach\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/simulate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "simulate"]
+            },
+            "description": "Simulates cold chain temp breach (11.4°C) to trigger alert ColdChainTemperatureAnomaly."
+          },
+          "response": []
+        },
+        {
+          "name": "7.9 Fault Injection (Reset Baseline)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scenario\": \"reset\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/monitoring/simulate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "monitoring", "simulate"]
+            },
+            "description": "Restores all telemetry metrics to safe healthy bounds."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

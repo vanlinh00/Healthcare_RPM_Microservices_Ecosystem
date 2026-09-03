@@ -1,0 +1,172 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 200,
+      "title": "JVM Memory & Garbage Collection (Micrometer)",
+      "type": "row"
+    },
+    {
+      "id": 21,
+      "title": "JVM Heap Memory Used vs Max",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) by (job)",
+          "legendFormat": "{{ job }} Used"
+        },
+        {
+          "expr": "sum(jvm_memory_max_bytes{area=\"heap\"}) by (job)",
+          "legendFormat": "{{ job }} Max Limit"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth" },
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "JVM Garbage Collection Pause Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(rate(jvm_gc_pause_seconds_sum[1m])) by (job)",
+          "legendFormat": "{{ job }} GC Pause Rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars" },
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 201,
+      "title": "Process CPU & Thread Concurrency",
+      "type": "row"
+    },
+    {
+      "id": 23,
+      "title": "CPU Usage per Microservice (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "targets": [
+        {
+          "expr": "process_cpu_usage * 100",
+          "legendFormat": "{{ job }} Process CPU"
+        },
+        {
+          "expr": "system_cpu_usage * 100",
+          "legendFormat": "{{ job }} Host System CPU"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "unit": "percent",
+          "max": 100,
+          "min": 0
+        }
+      }
+    },
+    {
+      "id": 24,
+      "title": "JVM Live & Daemon Threads",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "targets": [
+        {
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "{{ job }} Live Threads"
+        },
+        {
+          "expr": "jvm_threads_daemon_threads",
+          "legendFormat": "{{ job }} Daemon Threads"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line" },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 202,
+      "title": "Database Connection Pool (HikariCP) & Infrastructure",
+      "type": "row"
+    },
+    {
+      "id": 25,
+      "title": "HikariCP Active vs Idle Connections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active",
+          "legendFormat": "{{ job }} Active Conns"
+        },
+        {
+          "expr": "hikaricp_connections_idle",
+          "legendFormat": "{{ job }} Idle Conns"
+        },
+        {
+          "expr": "hikaricp_connections_pending",
+          "legendFormat": "{{ job }} Pending Waiters"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line" },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "title": "Kafka Producer & Consumer Message Rates",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "targets": [
+        {
+          "expr": "sum(rate(kafka_producer_record_send_total[1m])) by (topic)",
+          "legendFormat": "Produced: {{ topic }}"
+        },
+        {
+          "expr": "sum(rate(kafka_consumer_records_consumed_total[1m])) by (topic)",
+          "legendFormat": "Consumed: {{ topic }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth" },
+          "unit": "ops"
+        }
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["jvm", "micrometer", "hikaricp", "kafka", "infrastructure"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "JVM & Infrastructure Telemetry",
+  "uid": "jvm-infrastructure"
+}

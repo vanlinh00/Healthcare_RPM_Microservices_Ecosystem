@@ -219,6 +219,105 @@
           <pre id="brokerUriCode" style="margin: 0;"></pre>
         </div>
       </div>
+
+      <!-- Prometheus & Grafana Monitoring System Console -->
+      <div class="card" id="monitoringSection">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="badge" style="background: #e11d48; color: white;">Prometheus &amp; Grafana</span>
+              <span style="color: #94a3b8; font-size: 13px;">Full-Stack Microservices Telemetry</span>
+            </div>
+            <h2 style="margin: 0; font-size: 20px; color: #f8fafc;">
+              🩺 Telemetry &amp; Alerting Operations Console
+            </h2>
+          </div>
+          <span id="systemStatusBadge" class="badge badge-success">System: Healthy (10/10 UP)</span>
+        </div>
+
+        <!-- KPI Cards Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px;">
+          <div style="background: #0b1120; border: 1px solid #1e293b; padding: 10px 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">Active Targets</div>
+            <div id="kpiTargets" style="font-size: 18px; font-weight: bold; color: #34d399; margin-top: 2px;">10 / 10</div>
+          </div>
+          <div style="background: #0b1120; border: 1px solid #1e293b; padding: 10px 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">5xx Error Rate</div>
+            <div id="kpiErrors" style="font-size: 18px; font-weight: bold; color: #38bdf8; margin-top: 2px;">0.15%</div>
+          </div>
+          <div style="background: #0b1120; border: 1px solid #1e293b; padding: 10px 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">P95 Latency</div>
+            <div id="kpiLatency" style="font-size: 18px; font-weight: bold; color: #38bdf8; margin-top: 2px;">210 ms</div>
+          </div>
+          <div style="background: #0b1120; border: 1px solid #1e293b; padding: 10px 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">Cold-Chain Temp</div>
+            <div id="kpiTemp" style="font-size: 18px; font-weight: bold; color: #34d399; margin-top: 2px;">4.2°C</div>
+          </div>
+          <div style="background: #0b1120; border: 1px solid #1e293b; padding: 10px 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">Patient Vitals</div>
+            <div id="kpiVitals" style="font-size: 18px; font-weight: bold; color: #34d399; margin-top: 2px;">78 bpm / 98%</div>
+          </div>
+          <div style="background: #0b1120; border: 1px solid #1e293b; padding: 10px 12px; border-radius: 8px;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">JVM Heap Memory</div>
+            <div id="kpiHeap" style="font-size: 18px; font-weight: bold; color: #e2e8f0; margin-top: 2px;">384 MB</div>
+          </div>
+        </div>
+
+        <!-- Telemetry Actions & Direct Links -->
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+          <a href="/actuator/prometheus" target="_blank" class="btn btn-secondary" style="font-size: 13px; padding: 6px 12px;">
+            📊 Live /actuator/prometheus
+          </a>
+          <button class="btn btn-secondary" onclick="loadPrometheusTargets()" style="font-size: 13px; padding: 6px 12px;">
+            🎯 Scrape Targets
+          </button>
+          <button class="btn btn-secondary" onclick="loadPrometheusAlerts()" style="font-size: 13px; padding: 6px 12px;">
+            🚨 Alerting Rules
+          </button>
+          <button class="btn btn-secondary" onclick="loadGrafanaDashboards()" style="font-size: 13px; padding: 6px 12px;">
+            📈 Grafana Dashboards
+          </button>
+        </div>
+
+        <!-- Fault Injection & Alert Simulation Bar -->
+        <div style="background: #0b1120; border: 1px solid #1e293b; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 8px;">
+            🧪 Test Fault Injection &amp; Alert Simulation (Triggers alert.rules.yml in Prometheus):
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn" style="background: #7f1d1d; color: #fca5a5; font-size: 12px; padding: 6px 10px;" onclick="simulateFault('coldchain_breach')">
+              ❄️ Cold-Chain Breach (11.4°C)
+            </button>
+            <button class="btn" style="background: #78350f; color: #fde68a; font-size: 12px; padding: 6px 10px;" onclick="simulateFault('vital_spike')">
+              🚨 Code Blue (HR 162 bpm)
+            </button>
+            <button class="btn" style="background: #701a75; color: #f5d0fe; font-size: 12px; padding: 6px 10px;" onclick="simulateFault('5xx_spike')">
+              💥 5xx Error Spike (8.7%)
+            </button>
+            <button class="btn" style="background: #1e1b4b; color: #c7d2fe; font-size: 12px; padding: 6px 10px;" onclick="simulateFault('brute_force')">
+              🔒 HIPAA Brute-Force Spike
+            </button>
+            <button class="btn" style="background: #3f3f46; color: #e4e4e7; font-size: 12px; padding: 6px 10px;" onclick="simulateFault('service_down')">
+              🔌 Service Instance DOWN
+            </button>
+            <button class="btn" style="background: #064e3b; color: #6ee7b7; font-size: 12px; padding: 6px 10px;" onclick="simulateFault('reset')">
+              🔄 Reset Baseline
+            </button>
+          </div>
+          <div id="simFeedback" style="display: none; margin-top: 8px; font-size: 12px; color: #a5f3fc;"></div>
+        </div>
+
+        <!-- Dynamic Monitoring Content Panel -->
+        <div id="monitoringDetailsPanel" style="display: block;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 id="panelTitle" style="margin: 0; font-size: 14px; color: #38bdf8;">🎯 Prometheus Scrape Targets</h4>
+            <span style="font-size: 12px; color: #64748b;">Auto-evaluates every 10s</span>
+          </div>
+          <div id="panelContent">
+            <!-- Filled via JavaScript -->
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -303,6 +402,184 @@
           console.error(e);
         }
       }
+
+      // Monitoring & Telemetry Console Scripts
+      let currentActiveView = 'targets';
+
+      async function loadMonitoringOverview() {
+        try {
+          const res = await fetch('/api/v1/monitoring/overview');
+          const data = await res.json();
+          
+          document.getElementById('kpiTargets').textContent = data.activeServicesCount;
+          document.getElementById('kpiErrors').textContent = data.kpis.errorRate5xxPercent + '%';
+          document.getElementById('kpiLatency').textContent = data.kpis.p95LatencyMs + ' ms';
+          document.getElementById('kpiTemp').textContent = data.kpis.coldChainTempCelsius + '°C';
+          document.getElementById('kpiVitals').textContent = `${data.kpis.patientHeartRateBpm} bpm / ${data.kpis.patientSpo2Percent}%`;
+          document.getElementById('kpiHeap').textContent = data.kpis.jvmHeapUsedMb + ' MB';
+
+          const badge = document.getElementById('systemStatusBadge');
+          if (data.status === 'HEALTHY') {
+            badge.className = 'badge badge-success';
+            badge.textContent = `System: Healthy (${data.activeServicesCount} UP)`;
+          } else {
+            badge.className = 'badge';
+            badge.style.background = '#e11d48';
+            badge.style.color = 'white';
+            badge.textContent = `⚠️ Alerting (${data.alertsSummary.firingCount} firing)`;
+          }
+        } catch (err) {
+          console.error('Failed to fetch overview:', err);
+        }
+      }
+
+      async function loadPrometheusTargets() {
+        currentActiveView = 'targets';
+        document.getElementById('panelTitle').textContent = '🎯 Prometheus Scrape Targets (10 Services & Infrastructure)';
+        const panel = document.getElementById('panelContent');
+        panel.innerHTML = '<div style="color: #94a3b8; font-size: 13px;">Loading scrape targets...</div>';
+
+        try {
+          const res = await fetch('/api/v1/monitoring/prometheus/targets');
+          const json = await res.json();
+          const targets = json.data.activeTargets;
+
+          let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">';
+          targets.forEach(t => {
+            const isUp = t.health === 'up';
+            html += `
+              <div style="background: #030712; border: 1px solid ${isUp ? '#1e293b' : '#7f1d1d'}; padding: 12px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <strong style="color: #f8fafc; font-size: 14px;">${t.labels.job}</strong>
+                  <span class="badge ${isUp ? 'badge-success' : ''}" style="${!isUp ? 'background: #7f1d1d; color: #fca5a5;' : ''}">${t.health.toUpperCase()}</span>
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;"><code>${t.scrapeUrl}</code></div>
+                <div style="font-size: 11px; color: #64748b;">${t.description}</div>
+                <div style="margin-top: 6px; font-size: 11px; color: #38bdf8;">Last scrape latency: ${(t.lastScrapeDuration * 1000).toFixed(1)}ms</div>
+              </div>
+            `;
+          });
+          html += '</div>';
+          panel.innerHTML = html;
+        } catch (err) {
+          panel.innerHTML = '<div style="color: #f87171;">Failed to load targets: ' + err + '</div>';
+        }
+      }
+
+      async function loadPrometheusAlerts() {
+        currentActiveView = 'alerts';
+        document.getElementById('panelTitle').textContent = '🚨 Prometheus Alerting Rules (from alert.rules.yml)';
+        const panel = document.getElementById('panelContent');
+        panel.innerHTML = '<div style="color: #94a3b8; font-size: 13px;">Evaluating alerting rules...</div>';
+
+        try {
+          const res = await fetch('/api/v1/monitoring/prometheus/alerts');
+          const json = await res.json();
+          const alerts = json.data.alerts;
+
+          let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+          alerts.forEach(a => {
+            const isFiring = a.state === 'firing';
+            html += `
+              <div style="background: #030712; border: 1px solid ${isFiring ? '#dc2626' : '#1e293b'}; padding: 12px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
+                  <span style="font-weight: 600; font-size: 14px; color: ${isFiring ? '#f87171' : '#e2e8f0'};">
+                    ${isFiring ? '🔥' : '🛡️'} ${a.labels.alertname}
+                  </span>
+                  <div style="display: flex; gap: 6px;">
+                    <span class="badge" style="background: ${a.labels.severity === 'critical' || a.labels.severity === 'emergency' ? '#7f1d1d' : '#854d0e'}; color: white; font-size: 10px;">
+                      ${a.labels.severity}
+                    </span>
+                    <span class="badge ${isFiring ? '' : 'badge-success'}" style="${isFiring ? 'background: #dc2626; color: white;' : ''}; font-size: 10px;">
+                      ${a.state.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                <div style="font-size: 13px; color: ${isFiring ? '#fca5a5' : '#94a3b8'}; margin-bottom: 4px;">
+                  ${a.annotations.summary}
+                </div>
+                <div style="font-size: 11px; color: #64748b;">
+                  Rule group: <code>${a.group}</code> &bull; Current evaluation: <code>${a.value}</code>
+                </div>
+              </div>
+            `;
+          });
+          html += '</div>';
+          panel.innerHTML = html;
+        } catch (err) {
+          panel.innerHTML = '<div style="color: #f87171;">Failed to load alerts: ' + err + '</div>';
+        }
+      }
+
+      async function loadGrafanaDashboards() {
+        currentActiveView = 'grafana';
+        document.getElementById('panelTitle').textContent = '📈 Auto-Provisioned Grafana 11 Dashboards';
+        const panel = document.getElementById('panelContent');
+        panel.innerHTML = '<div style="color: #94a3b8; font-size: 13px;">Loading Grafana catalog...</div>';
+
+        try {
+          const res = await fetch('/api/v1/monitoring/grafana/dashboards');
+          const dashboards = await res.json();
+
+          let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">';
+          dashboards.forEach(d => {
+            html += `
+              <div style="background: #030712; border: 1px solid #1e293b; padding: 14px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                    <span class="badge badge-info" style="font-size: 10px;">Grafana 11</span>
+                    <span style="font-size: 11px; color: #94a3b8;">${d.filename}</span>
+                  </div>
+                  <h4 style="margin: 0 0 8px; font-size: 15px; color: #f8fafc;">${d.title}</h4>
+                  <p style="margin: 0 0 12px; font-size: 12px; color: #94a3b8;">${d.description}</p>
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px;">
+                    ${d.tags.map(t => `<span style="background: #1e293b; color: #38bdf8; font-size: 10px; padding: 2px 6px; border-radius: 4px;">#${t}</span>`).join('')}
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <a href="/api/v1/monitoring/grafana/dashboards/${d.uid}" target="_blank" class="btn btn-secondary" style="font-size: 11px; padding: 5px 10px; width: 100%; justify-content: center;">
+                    Inspect Dashboard JSON
+                  </a>
+                </div>
+              </div>
+            `;
+          });
+          html += '</div>';
+          panel.innerHTML = html;
+        } catch (err) {
+          panel.innerHTML = '<div style="color: #f87171;">Failed to load dashboards: ' + err + '</div>';
+        }
+      }
+
+      async function simulateFault(scenario) {
+        const feedback = document.getElementById('simFeedback');
+        feedback.style.display = 'block';
+        feedback.textContent = 'Injecting simulation scenario...';
+
+        try {
+          const res = await fetch('/api/v1/monitoring/simulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scenario: scenario })
+          });
+          const result = await res.json();
+          feedback.textContent = '⚡ ' + result.message;
+
+          // Refresh overview and active view
+          await loadMonitoringOverview();
+          if (currentActiveView === 'targets') loadPrometheusTargets();
+          else if (currentActiveView === 'alerts') loadPrometheusAlerts();
+        } catch (err) {
+          feedback.textContent = 'Simulation error: ' + err;
+        }
+      }
+
+      // Initialize on load & poll every 10 seconds
+      window.addEventListener('DOMContentLoaded', () => {
+        loadMonitoringOverview();
+        loadPrometheusTargets();
+        setInterval(loadMonitoringOverview, 10000);
+      });
     </script>
   </body>
 </html>

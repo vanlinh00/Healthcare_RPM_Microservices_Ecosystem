@@ -1,0 +1,224 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 300,
+      "title": "Remote Patient Monitoring (RPM) Telemetry & Anomaly Detection",
+      "type": "row"
+    },
+    {
+      "id": 31,
+      "title": "Active Telemetry Streams (ICU Beds & RPM Wearables)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(patient_telemetry_active_streams)",
+          "legendFormat": "Active Sensors"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 32,
+      "title": "Vital Sign Anomaly Rate",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(rate(patient_vitals_anomalies_total[1m]))",
+          "legendFormat": "Anomalies/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 1.0 }
+            ]
+          },
+          "unit": "events/s"
+        }
+      }
+    },
+    {
+      "id": 33,
+      "title": "Fulfillment Cold-Chain Safe Status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(fulfillment_coldchain_breaches_total)",
+          "legendFormat": "Total Breaches"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "title": "HIPAA Security Audited Events / min",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum(rate(hipaa_security_audit_events_total[1m])) * 60",
+          "legendFormat": "Audit Events/min"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 35,
+      "title": "Patient Real-Time Vitals Distribution (BPM & SpO2)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "expr": "patient_telemetry_heart_rate_bpm",
+          "legendFormat": "HR (bpm) - {{ patient_id }}"
+        },
+        {
+          "expr": "patient_telemetry_spo2_percent",
+          "legendFormat": "SpO2 (%) - {{ patient_id }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth" }
+        }
+      }
+    },
+    {
+      "id": 36,
+      "title": "Cold-Chain Logistics Temperature Range (2°C - 8°C Limit)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        {
+          "expr": "fulfillment_coldchain_temperature_celsius",
+          "legendFormat": "Sensor: {{ sensor_id }} (Package {{ package_id }})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "thresholdsStyle": { "mode": "area" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 2 },
+              { "color": "red", "value": 8 }
+            ]
+          },
+          "unit": "celsius"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "id": 301,
+      "title": "HIPAA Security Audit & Saga Transaction Metrics",
+      "type": "row"
+    },
+    {
+      "id": 37,
+      "title": "HIPAA Security Audit Events (Logins, TOTP, Role Changes)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "targets": [
+        {
+          "expr": "sum(rate(hipaa_security_audit_events_total{action=\"LOGIN_SUCCESS\"}[1m]))",
+          "legendFormat": "Auth Success"
+        },
+        {
+          "expr": "sum(rate(hipaa_security_audit_events_total{action=\"AUTH_FAILED\"}[1m]))",
+          "legendFormat": "Auth Failed (Alert)"
+        },
+        {
+          "expr": "sum(rate(hipaa_security_audit_events_total{action=\"TOTP_VERIFY\"}[1m]))",
+          "legendFormat": "TOTP MFA Verified"
+        },
+        {
+          "expr": "sum(rate(hipaa_security_audit_events_total{action=\"GOOGLE_SSO\"}[1m]))",
+          "legendFormat": "Google SSO Federated"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "stacking": { "mode": "normal" } },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "title": "Appointment Saga Transactions: Success vs Compensations",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "targets": [
+        {
+          "expr": "sum(rate(saga_orchestrator_events_total{status=\"COMPLETED\"}[1m]))",
+          "legendFormat": "Sagas Succeeded"
+        },
+        {
+          "expr": "sum(rate(saga_orchestrator_events_total{status=\"COMPENSATED\"}[1m]))",
+          "legendFormat": "Sagas Rolled Back (Compensated)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineInterpolation": "smooth" },
+          "unit": "ops"
+        }
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["clinical", "rpm", "telemetry", "hipaa", "audit", "saga"],
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Clinical RPM Telemetry & HIPAA Security Audit",
+  "uid": "clinical-rpm-hipaa"
+}
