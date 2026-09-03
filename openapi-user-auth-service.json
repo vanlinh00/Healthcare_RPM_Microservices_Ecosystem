@@ -1,0 +1,953 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Healthcare & RPM User & IAM Authentication Microservice API",
+    "description": "### Enterprise-Grade Healthcare & Remote Patient Monitoring (RPM) Identity Platform\n\nThis microservice provides identity lifecycle, Keycloak 24 IAM management, OAuth2 / OIDC Direct Access Grants, HIPAA-compliant RFC 6238 TOTP Multi-Factor Authentication (2FA), Role-Based Access Control (RBAC), composite role permission hierarchies, and physician verification.\n\n#### Key Security & Architecture Features:\n- **Keycloak 24 IAM Integration**: Token issuance, refresh token rotation, single sign-out.\n- **HIPAA Security Rule Enforcement**: Dual-factor TOTP for high-privilege roles, audit logging.\n- **Composite Role Mapping**: Deep hierarchical permission resolution for Doctors, Nurses, Patients, Pharmacists, and Admins.\n- **Group Membership**: Token claims embedding hierarchical paths such as `/Doctors-Writers`.",
+    "contact": {
+      "name": "Healthcare RPM Engineering & Security Team",
+      "url": "https://healthcare.ecosystem.org",
+      "email": "linhnv03@ominext.com"
+    },
+    "license": {
+      "name": "HIPAA Audited & Apache 2.0",
+      "url": "https://www.hhs.gov/hipaa/for-professionals/security/index.html"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081",
+      "description": "Direct Local Microservice Runtime (Spring Boot 3.4)"
+    },
+    {
+      "url": "http://localhost:8000/user-service",
+      "description": "Kong API Gateway Ingress Proxy Routing"
+    },
+    {
+      "url": "https://ais-dev-fyrk2325w22brqu3wlumc6-64171391955.asia-southeast1.run.app",
+      "description": "Cloud Run Production/Dev Environment"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication & MFA",
+      "description": "Keycloak 24 IAM Direct Access Grants, user registration, single sign-out, token refresh, and HIPAA RFC 6238 TOTP 2FA"
+    },
+    {
+      "name": "Keycloak IAM & RBAC",
+      "description": "Keycloak 24 realm & client role lifecycle, composite permission hierarchies, and user/group role mappings"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Register new user account",
+        "description": "Provisions a new user account across Keycloak IAM realm and PostgreSQL user_auth_db, assigns realm/client roles, seeds credentials, and sets up optional HIPAA TOTP 2FA.",
+        "operationId": "registerUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User successfully registered in Keycloak and PostgreSQL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload or validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Username or email already exists in Keycloak IAM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Authenticate user (Direct Access Grant)",
+        "description": "Exchanges username/password credentials against Keycloak 24 IAM for a signed RS256 JWT access token and refresh token. Enforces TOTP 2FA verification when configured on user profile.",
+        "operationId": "loginUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication successful, returns tokens and profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials or TOTP verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Keycloak Single Sign-Out (Logout)",
+        "description": "Revokes the active refresh token and terminates the user's Keycloak session across the realm.",
+        "operationId": "logoutUser",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session terminated and token revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "SUCCESS" },
+                    "message": { "type": "string", "example": "Keycloak session terminated and tokens revoked successfully." }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Refresh JWT access token",
+        "description": "Uses Keycloak OpenID Connect refresh_token grant to rotate tokens and generate a fresh RS256 access token.",
+        "operationId": "refreshToken",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or invalid refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Get current authenticated user profile",
+        "description": "Decodes active Keycloak JWT access token and returns subject, claims, expiration, and realm roles.",
+        "operationId": "getCurrentUser",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user token claims and identity metadata"
+          },
+          "401": {
+            "description": "Unauthorized - Missing or invalid Bearer JWT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/setup": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Generate TOTP 2FA setup secret and QR code",
+        "description": "Generates a cryptographically secure RFC 6238 Base32 secret key and otpauth:// URI for authenticator app enrollment.",
+        "operationId": "setupTotp",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TOTP secret and QR code URI generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "secret": { "type": "string", "example": "JBSWY3DPEHPK3PXP" },
+                    "qrCodeUri": { "type": "string", "example": "data:image/png;base64,iVBORw0KGgo..." }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/verify": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Verify 6-digit TOTP code",
+        "description": "Validates submitted 6-digit time-based code against the provided secret with clock-drift windowing.",
+        "operationId": "verifyTotp",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "secret": { "type": "string", "example": "JBSWY3DPEHPK3PXP" },
+                  "code": { "type": "string", "example": "492817" }
+                },
+                "required": ["secret", "code"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "TOTP verification result and HIPAA compliance status"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/audit-logs": {
+      "get": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Retrieve HIPAA security audit logs",
+        "description": "Queries the immutable PostgreSQL audit log for authentication events, login failures, role updates, and token lifecycle.",
+        "operationId": "getAuditLogs",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recent HIPAA audit entries"
+          },
+          "403": {
+            "description": "Forbidden - Requires ADMIN realm role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/iam/roles": {
+      "get": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "List all realm-level roles",
+        "description": "Returns all realm roles defined in Keycloak with their composite indicators, descriptions, and metadata.",
+        "operationId": "getRealmRoles",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Optional role name search prefix",
+            "required": false,
+            "schema": { "type": "string", "example": "DOC" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of realm roles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoleResponseDTO"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Create Realm or Client role",
+        "description": "Creates a new role within the Keycloak realm or associated with a specific client (e.g., healthcare-api-gateway).",
+        "operationId": "createRole",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Role successfully created in Keycloak",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponseDTO"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid role request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Role already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/iam/roles/{roleName}": {
+      "get": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Get role details by name",
+        "description": "Fetches complete role representation, including whether it is composite, its attributes, and direct sub-roles.",
+        "operationId": "getRoleByName",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "example": "DOCTOR" }
+          },
+          {
+            "name": "clientRole",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false }
+          },
+          {
+            "name": "clientId",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Role details retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponseDTO"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Role not found"
+          }
+        }
+      },
+      "put": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Update role definition",
+        "description": "Updates an existing Keycloak role description and custom attributes.",
+        "operationId": "updateRole",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "example": "DOCTOR" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Role updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponseDTO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Delete role",
+        "description": "Permanently deletes a role from Keycloak realm or client container.",
+        "operationId": "deleteRole",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "example": "TEMPORARY_STAFF" }
+          },
+          {
+            "name": "clientRole",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false }
+          },
+          {
+            "name": "clientId",
+            "in": "query",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Role deleted successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/iam/roles/{roleName}/composites": {
+      "post": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Add sub-roles to composite role",
+        "description": "Enables hierarchical permission inheritance by nesting child roles into a parent composite role.",
+        "operationId": "addSubRolesToComposite",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "example": "DOCTOR" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": { "type": "string" },
+                "example": ["READ_PATIENT_VITALS", "WRITE_PRESCRIPTIONS"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sub-roles successfully added to composite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleResponseDTO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Remove sub-roles from composite role",
+        "description": "Removes specified sub-roles from the composite hierarchy of a parent role.",
+        "operationId": "removeSubRolesFromComposite",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleName",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "example": "DOCTOR" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sub-roles removed successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/iam/mappings/users": {
+      "post": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Assign roles to user",
+        "description": "Directly grants realm or client roles to a designated Keycloak user identity.",
+        "operationId": "assignRolesToUser",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRoleMappingRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Roles successfully assigned to user"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Revoke roles from user",
+        "description": "Revokes realm or client roles previously assigned to a Keycloak user.",
+        "operationId": "revokeRolesFromUser",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRoleMappingRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Roles successfully revoked from user"
+          }
+        }
+      }
+    },
+    "/api/v1/iam/mappings/groups": {
+      "post": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Assign roles to group",
+        "description": "Grants realm or client roles to a Keycloak group (e.g. /Doctors-Writers), propagating permissions to all members.",
+        "operationId": "assignRolesToGroup",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupRoleMappingRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Roles successfully assigned to group"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Revoke roles from group",
+        "description": "Revokes realm or client roles mapped to a Keycloak group.",
+        "operationId": "revokeRolesFromGroup",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupRoleMappingRequestDTO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Roles successfully revoked from group"
+          }
+        }
+      }
+    },
+    "/api/v1/iam/mappings/users/{userId}/effective": {
+      "get": {
+        "tags": ["Keycloak IAM & RBAC"],
+        "summary": "Audit effective user permissions",
+        "description": "Deep hierarchical resolution: calculates total effective permissions by combining direct realm roles, client roles, group memberships, and recursively expanded composite sub-roles.",
+        "operationId": "getEffectiveUserPermissions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "Keycloak User UUID",
+            "schema": { "type": "string", "example": "usr-doc-204" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective permission audit report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveUserPermissionsDTO"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter Keycloak JWT Access Token obtained from `/api/v1/auth/login`. Token carries standard claims (`sub`, `preferred_username`, `realm_access.roles`, `groups`)."
+      }
+    },
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "description": "Payload for user authentication with Keycloak Direct Access Grants and optional TOTP 2FA",
+        "required": ["usernameOrEmail", "password"],
+        "properties": {
+          "usernameOrEmail": { "type": "string", "description": "Username or registered email address", "example": "doctor_emily" },
+          "password": { "type": "string", "description": "Account password", "example": "Password123!" },
+          "totpCode": { "type": "string", "description": "Optional 6-digit TOTP code", "example": "492817" },
+          "deviceId": { "type": "string", "description": "Client device UUID", "example": "dev-ios-9410" },
+          "clientIp": { "type": "string", "description": "Remote client IP address", "example": "192.168.1.100" },
+          "userAgent": { "type": "string", "description": "Client browser/agent", "example": "Mozilla/5.0" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "description": "OAuth2 / OIDC Direct Access Grant Authentication response carrying Keycloak JWT access token, refresh token, and user profile",
+        "properties": {
+          "access_token": { "type": "string", "description": "Signed RS256 JWT access token containing realm roles and group claims" },
+          "refresh_token": { "type": "string", "description": "OIDC refresh token for token renewal and session revocation" },
+          "token_type": { "type": "string", "example": "Bearer" },
+          "expires_in": { "type": "integer", "example": 1800 },
+          "refresh_expires_in": { "type": "integer", "example": 18000 },
+          "session_state": { "type": "string", "example": "d9418a00-1123-41c9-82a1-0081bf44ef1a" },
+          "scope": { "type": "string", "example": "openid email profile healthcare-api roles" },
+          "totp_required": { "type": "boolean", "example": false },
+          "totp_verified": { "type": "boolean", "example": true },
+          "user": {
+            "$ref": "#/components/schemas/UserProfileDto"
+          }
+        }
+      },
+      "UserProfileDto": {
+        "type": "object",
+        "description": "Authenticated user profile summary",
+        "properties": {
+          "id": { "type": "string", "example": "usr-doc-204" },
+          "email": { "type": "string", "example": "emily.vance@healthcare.org" },
+          "username": { "type": "string", "example": "doctor_emily" },
+          "firstName": { "type": "string", "example": "Emily" },
+          "lastName": { "type": "string", "example": "Vance, MD" },
+          "primaryRole": { "type": "string", "example": "DOCTOR" },
+          "roles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["DOCTOR", "default-roles-healthcare"]
+          },
+          "totpEnabled": { "type": "boolean", "example": true },
+          "active": { "type": "boolean", "example": true }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "description": "Payload for onboarding new patient, physician, nurse, or clinical staff into Keycloak and PostgreSQL",
+        "required": ["email", "password", "firstName", "lastName"],
+        "properties": {
+          "email": { "type": "string", "example": "emily.vance@healthcare.org" },
+          "username": { "type": "string", "example": "doctor_emily" },
+          "password": { "type": "string", "example": "Password123!" },
+          "firstName": { "type": "string", "example": "Emily" },
+          "lastName": { "type": "string", "example": "Vance" },
+          "role": { "type": "string", "enum": ["PATIENT", "DOCTOR", "NURSE", "PHARMACIST", "ADMIN"], "example": "DOCTOR" },
+          "phoneNumber": { "type": "string", "example": "+1-555-019-2834" },
+          "enableTotp": { "type": "boolean", "example": true },
+          "medicalLicenseNumber": { "type": "string", "example": "MD-CA-99201" },
+          "specialty": { "type": "string", "example": "Cardiology" },
+          "yearsOfExperience": { "type": "integer", "example": 12 },
+          "consultationFee": { "type": "number", "example": 150.00 }
+        }
+      },
+      "RegisterResponse": {
+        "type": "object",
+        "description": "Response payload after successful user provisioning in Keycloak and PostgreSQL",
+        "properties": {
+          "id": { "type": "string", "example": "usr-doc-204" },
+          "email": { "type": "string", "example": "emily.vance@healthcare.org" },
+          "username": { "type": "string", "example": "doctor_emily" },
+          "firstName": { "type": "string", "example": "Emily" },
+          "lastName": { "type": "string", "example": "Vance" },
+          "primaryRole": { "type": "string", "example": "DOCTOR" },
+          "roles": { "type": "array", "items": { "type": "string" }, "example": ["DOCTOR"] },
+          "totp_enabled": { "type": "boolean", "example": true },
+          "totp_secret": { "type": "string", "example": "JBSWY3DPEHPK3PXP" },
+          "totp_qr_code_uri": { "type": "string", "example": "data:image/png;base64,..." },
+          "message": { "type": "string", "example": "User registered successfully in Keycloak IAM." }
+        }
+      },
+      "LogoutRequest": {
+        "type": "object",
+        "description": "Payload for terminating Keycloak user session and revoking active refresh tokens",
+        "required": ["refreshToken"],
+        "properties": {
+          "refreshToken": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." },
+          "allSessions": { "type": "boolean", "default": false }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "description": "Request payload for renewing JWT access token using Keycloak refresh_token grant",
+        "required": ["refreshToken"],
+        "properties": {
+          "refreshToken": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+        }
+      },
+      "RoleRequestDTO": {
+        "type": "object",
+        "description": "Payload for creating or updating a Keycloak realm or client role with optional composite inheritance and HIPAA attributes",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "example": "DOCTOR" },
+          "description": { "type": "string", "example": "Attending physician with vitals and prescribing authority" },
+          "composite": { "type": "boolean", "default": false },
+          "subRoleNames": { "type": "array", "items": { "type": "string" }, "example": ["READ_PATIENT_VITALS", "WRITE_PRESCRIPTIONS"] },
+          "clientRole": { "type": "boolean", "default": false },
+          "clientId": { "type": "string", "example": "healthcare-api-gateway" }
+        }
+      },
+      "RoleResponseDTO": {
+        "type": "object",
+        "description": "Representation of a Keycloak realm or client role, including composite sub-roles and attributes",
+        "properties": {
+          "id": { "type": "string", "example": "role-uuid-101" },
+          "name": { "type": "string", "example": "DOCTOR" },
+          "description": { "type": "string", "example": "Attending Physician" },
+          "composite": { "type": "boolean", "example": true },
+          "clientRole": { "type": "boolean", "example": false },
+          "containerId": { "type": "string", "example": "healthcare-realm" }
+        }
+      },
+      "UserRoleMappingRequestDTO": {
+        "type": "object",
+        "description": "Payload for mapping or unmapping Keycloak realm/client roles to a specific user",
+        "required": ["userId", "roleNames"],
+        "properties": {
+          "userId": { "type": "string", "example": "usr-doc-204" },
+          "roleNames": { "type": "array", "items": { "type": "string" }, "example": ["DOCTOR", "CLINICAL_LEAD"] },
+          "clientRole": { "type": "boolean", "default": false },
+          "clientId": { "type": "string", "example": "healthcare-api-gateway" }
+        }
+      },
+      "GroupRoleMappingRequestDTO": {
+        "type": "object",
+        "description": "Payload for mapping or unmapping Keycloak realm/client roles to a specific user group",
+        "required": ["groupId", "roleNames"],
+        "properties": {
+          "groupId": { "type": "string", "example": "grp-doc-writers-10" },
+          "roleNames": { "type": "array", "items": { "type": "string" }, "example": ["DOCTOR", "PRESCRIPTION_WRITER"] },
+          "clientRole": { "type": "boolean", "default": false },
+          "clientId": { "type": "string", "example": "healthcare-api-gateway" }
+        }
+      },
+      "EffectiveUserPermissionsDTO": {
+        "type": "object",
+        "description": "Deep audit representation of all direct and hierarchical composite permissions assigned to a user",
+        "properties": {
+          "userId": { "type": "string", "example": "usr-doc-204" },
+          "username": { "type": "string", "example": "doctor_emily" },
+          "email": { "type": "string", "example": "emily.vance@healthcare.org" },
+          "directRealmRoles": { "type": "array", "items": { "type": "string" }, "example": ["DOCTOR"] },
+          "compositeEffectiveRealmRoles": { "type": "array", "items": { "type": "string" }, "example": ["DOCTOR", "READ_PATIENT_VITALS", "WRITE_PRESCRIPTIONS"] },
+          "totalEffectiveRolesCount": { "type": "integer", "example": 7 }
+        }
+      },
+      "ApiErrorResponse": {
+        "type": "object",
+        "description": "Standardized REST Error payload conforming to RFC 7807 Problem Details",
+        "properties": {
+          "status": { "type": "integer", "example": 400 },
+          "error": { "type": "string", "example": "Bad Request" },
+          "message": { "type": "string", "example": "Invalid credentials or TOTP 2FA code" },
+          "path": { "type": "string", "example": "/api/v1/auth/login" },
+          "timestamp": { "type": "string", "example": "2026-09-03T03:15:00.000Z" }
+        }
+      }
+    }
+  }
+}

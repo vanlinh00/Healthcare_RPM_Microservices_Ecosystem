@@ -1537,6 +1537,97 @@ async function startServer() {
     }
   });
 
+  // Serve OpenAPI 3.0 Raw Spec (SpringDoc /v3/api-docs mirror)
+  app.get('/v3/api-docs', (req, res) => {
+    try {
+      const openApiSpec = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'openapi-user-auth-service.json'), 'utf-8'));
+      res.setHeader('Content-Type', 'application/json');
+      res.json(openApiSpec);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to load OpenAPI specification: ' + err.message });
+    }
+  });
+
+  // Interactive Swagger UI HTML page
+  app.get(['/swagger-ui.html', '/swagger-ui', '/swagger'], (req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Swagger UI - Healthcare User & IAM Service</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css" />
+    <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5.18.2/favicon-32x32.png" sizes="32x32" />
+    <style>
+      html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }
+      *, *:before, *:after { box-sizing: inherit; }
+      body { margin: 0; background: #fafafa; font-family: sans-serif; }
+      .topbar { background-color: #0f172a !important; padding: 10px 0; }
+      .topbar-wrapper img { content: url('https://raw.githubusercontent.com/swagger-api/swagger-ui/master/dist/favicon-32x32.png'); }
+      .custom-header {
+        background: #0f172a;
+        color: #f8fafc;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #38bdf8;
+      }
+      .custom-header h1 {
+        font-size: 1.15rem;
+        margin: 0;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .custom-header a {
+        color: #38bdf8;
+        font-size: 0.85rem;
+        text-decoration: none;
+        background: #1e293b;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #475569;
+      }
+      .custom-header a:hover { background: #334155; }
+    </style>
+  </head>
+  <body>
+    <div class="custom-header">
+      <h1>🩺 Healthcare & RPM Microservices &bull; Keycloak 24 IAM OpenAPI 3.0 Platform</h1>
+      <div style="display: flex; gap: 10px;">
+        <a href="/v3/api-docs" target="_blank">📄 Raw OpenAPI JSON</a>
+        <a href="/" target="_self">🏠 Back to Platform Home</a>
+      </div>
+    </div>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js"></script>
+    <script>
+      window.onload = function() {
+        window.ui = SwaggerUIBundle({
+          url: '/v3/api-docs',
+          dom_id: '#swagger-ui',
+          deepLinking: true,
+          presets: [
+            SwaggerUIBundle.presets.apis,
+            SwaggerUIStandalonePreset
+          ],
+          plugins: [
+            SwaggerUIBundle.plugins.DownloadUrl
+          ],
+          layout: "StandaloneLayout",
+          docExpansion: "list",
+          filter: true,
+          persistAuthorization: true
+        });
+      };
+    </script>
+  </body>
+</html>`);
+  });
+
   // Vite middleware for development vs static for production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
