@@ -54,6 +54,11 @@
             <artifactId>keycloak-admin-client</artifactId>
             <version>${keycloak.version}</version>
         </dependency>
+        <!-- SpringDoc OpenAPI 3.0 Platform (Swagger UI & OpenAPI v3 Specification) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
         <!-- TOTP 2FA Library -->
         <dependency>
             <groupId>dev.samstevens.totp</groupId>

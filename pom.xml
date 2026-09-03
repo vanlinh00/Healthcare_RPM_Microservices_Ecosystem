@@ -35,10 +35,18 @@
         <lombok.version>1.18.36</lombok.version>
         <liquibase.version>4.31.0</liquibase.version>
         <elasticsearch.version>8.17.0</elasticsearch.version>
+        <springdoc.version>2.8.5</springdoc.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- SpringDoc OpenAPI 3 Starter for Spring Boot 3 -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+
             <!-- Spring Boot Dependencies -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
