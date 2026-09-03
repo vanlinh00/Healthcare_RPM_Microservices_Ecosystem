@@ -129,6 +129,150 @@
         }
       }
     },
+    "/api/v1/auth/google/url": {
+      "get": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Get Keycloak Google Login Authorization URL",
+        "description": "Constructs the Keycloak OpenID Connect authorization URL configured with kc_idp_hint=google. Clients (web/mobile/popups) redirect the user to this URL to authenticate with their Google account via Keycloak.",
+        "operationId": "getGoogleAuthUrl",
+        "parameters": [
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": false,
+            "description": "Optional client callback redirect URI",
+            "schema": {
+              "type": "string",
+              "example": "http://localhost:3000/auth/callback"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Keycloak Google authorization URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleAuthUrlResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google/callback": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Exchange Google OAuth Authorization Code via Keycloak",
+        "description": "Exchanges the authorization code returned by Keycloak after Google authentication for signed RS256 JWT access tokens and refresh tokens. Syncs user account and records HIPAA security audit log.",
+        "operationId": "exchangeGoogleCode",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleAuthCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google authentication successful, returns Keycloak JWT tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired authorization code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google/token": {
+      "post": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Authenticate with Google ID Token via Keycloak",
+        "description": "Authenticates using a Google signed ID token (e.g. from Google Sign-In SDK or One Tap) via Keycloak RFC 8693 Token Exchange or federated verification, automatically provisioning the user in Keycloak and PostgreSQL.",
+        "operationId": "loginWithGoogleToken",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleTokenLoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google Token validated and Keycloak JWT issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid Google Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google/config": {
+      "get": {
+        "tags": ["Authentication & MFA"],
+        "summary": "Get Keycloak Google Identity Provider Setup Configuration",
+        "description": "Returns the Keycloak broker redirect URI needed for Google Cloud Console OAuth 2.0 Client credentials, the status of Keycloak's Google IDP configuration, and step-by-step setup instructions.",
+        "operationId": "getGoogleIdpConfig",
+        "parameters": [
+          {
+            "name": "client_callback_url",
+            "in": "query",
+            "required": false,
+            "description": "Optional client callback URL to test",
+            "schema": {
+              "type": "string",
+              "example": "http://localhost:3000/auth/callback"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Keycloak Google IDP setup instructions and broker endpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleIdpConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "tags": ["Authentication & MFA"],
@@ -946,6 +1090,64 @@
           "message": { "type": "string", "example": "Invalid credentials or TOTP 2FA code" },
           "path": { "type": "string", "example": "/api/v1/auth/login" },
           "timestamp": { "type": "string", "example": "2026-09-03T03:15:00.000Z" }
+        }
+      },
+      "GoogleAuthUrlResponse": {
+        "type": "object",
+        "description": "Keycloak Google Identity Provider authorization URL payload",
+        "properties": {
+          "auth_url": { "type": "string", "description": "Direct Keycloak OIDC authorization URL with kc_idp_hint=google", "example": "http://localhost:8080/realms/healthcare-realm/protocol/openid-connect/auth?client_id=healthcare-api-gateway&response_type=code&scope=openid%20profile%20email%20roles&redirect_uri=http://localhost:3000/auth/callback&kc_idp_hint=google" },
+          "keycloak_broker_endpoint": { "type": "string", "description": "Keycloak broker redirect URI to register in Google Cloud Console Credentials", "example": "http://localhost:8080/realms/healthcare-realm/broker/google/endpoint" },
+          "client_id": { "type": "string", "example": "healthcare-api-gateway" },
+          "realm": { "type": "string", "example": "healthcare-realm" },
+          "provider": { "type": "string", "example": "google" },
+          "redirect_uri": { "type": "string", "example": "http://localhost:3000/auth/callback" }
+        }
+      },
+      "GoogleAuthCodeRequest": {
+        "type": "object",
+        "description": "Request payload to exchange Keycloak authorization code (after Google social login) for JWT access tokens",
+        "required": ["code"],
+        "properties": {
+          "code": { "type": "string", "description": "Authorization code returned by Keycloak after Google authentication", "example": "91a18274-c089-4cb3-911e-08991be249a1.d8e01" },
+          "redirect_uri": { "type": "string", "description": "Callback URI originally passed when initiating the Google OAuth flow", "example": "http://localhost:3000/auth/callback" },
+          "deviceId": { "type": "string", "example": "dev-ios-9410" },
+          "clientIp": { "type": "string", "example": "192.168.1.100" },
+          "userAgent": { "type": "string", "example": "Mozilla/5.0" }
+        }
+      },
+      "GoogleTokenLoginRequest": {
+        "type": "object",
+        "description": "Payload for Google OAuth2 / OIDC Token login via Keycloak token exchange or federated credential verification",
+        "required": ["id_token"],
+        "properties": {
+          "id_token": { "type": "string", "description": "Google signed JWT ID token from Google Identity Services", "example": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwZDY..." },
+          "access_token": { "type": "string", "description": "Optional Google OAuth2 access token", "example": "ya29.a0AWY7Ckk..." },
+          "deviceId": { "type": "string", "example": "dev-browser-client" },
+          "clientIp": { "type": "string", "example": "192.168.1.100" },
+          "userAgent": { "type": "string", "example": "Mozilla/5.0" }
+        }
+      },
+      "GoogleIdpConfigResponse": {
+        "type": "object",
+        "description": "Keycloak Google Identity Provider configuration metadata and setup instructions",
+        "properties": {
+          "configured": { "type": "boolean", "example": true },
+          "identity_provider_alias": { "type": "string", "example": "google" },
+          "keycloak_broker_redirect_uri": { "type": "string", "example": "http://localhost:8080/realms/healthcare-realm/broker/google/endpoint" },
+          "client_callback_url": { "type": "string", "example": "http://localhost:3000/auth/callback" },
+          "setup_instructions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": [
+              "1. Open Google Cloud Console -> APIs & Services -> Credentials",
+              "2. Add Authorized redirect URI: http://localhost:8080/realms/healthcare-realm/broker/google/endpoint",
+              "3. In Keycloak Admin Console -> Identity Providers -> Add Provider -> Google"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     }

@@ -1,5 +1,9 @@
 package com.healthcare.user.controller;
 
+import com.healthcare.user.dto.GoogleAuthCodeRequest;
+import com.healthcare.user.dto.GoogleAuthUrlResponse;
+import com.healthcare.user.dto.GoogleIdpConfigResponse;
+import com.healthcare.user.dto.GoogleTokenLoginRequest;
 import com.healthcare.user.dto.LoginRequest;
 import com.healthcare.user.dto.LoginResponse;
 import com.healthcare.user.dto.LogoutRequest;
@@ -125,6 +129,105 @@ public class AuthController {
 
         log.info("Received login request for user: {}", loginRequest.getUsernameOrEmail());
         LoginResponse response = keycloakAuthService.login(loginRequest);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get Keycloak Google Identity Provider authorization URL.
+     * Initiates OIDC flow directly to Google using Keycloak's kc_idp_hint=google parameter.
+     */
+    @Operation(
+            summary = "Get Keycloak Google Login Authorization URL",
+            description = "Constructs the Keycloak OpenID Connect authorization URL configured with kc_idp_hint=google. " +
+                    "Clients (web/mobile/popups) redirect the user to this URL to authenticate with their Google account via Keycloak."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Keycloak Google authorization URL generated",
+                    content = @Content(schema = @Schema(implementation = GoogleAuthUrlResponse.class)))
+    })
+    @GetMapping("/google/url")
+    public ResponseEntity<GoogleAuthUrlResponse> getGoogleAuthUrl(
+            @Parameter(description = "Optional client callback redirect URI (default: http://localhost:3000/auth/callback)",
+                    example = "http://localhost:3000/auth/callback")
+            @RequestParam(value = "redirect_uri", required = false) String redirectUri) {
+        log.info("Request for Keycloak Google authorization URL with redirect_uri: {}", redirectUri);
+        GoogleAuthUrlResponse response = keycloakAuthService.getGoogleAuthUrl(redirectUri);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Exchange Keycloak authorization code for JWT tokens after Google Social Login.
+     */
+    @Operation(
+            summary = "Exchange Google OAuth Authorization Code via Keycloak",
+            description = "Exchanges the authorization code returned by Keycloak after Google authentication for signed RS256 JWT access tokens " +
+                    "and refresh tokens. Syncs user account and records HIPAA security audit log."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Google authentication successful, returns Keycloak JWT tokens",
+                    content = @Content(schema = @Schema(implementation = LoginResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid or expired authorization code",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Keycloak token exchange rejected",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    @PostMapping("/google/callback")
+    public ResponseEntity<LoginResponse> exchangeGoogleCode(
+            @Valid @RequestBody GoogleAuthCodeRequest request,
+            HttpServletRequest httpRequest) {
+
+        request.setClientIp(httpRequest.getRemoteAddr());
+        request.setUserAgent(httpRequest.getHeader("User-Agent"));
+
+        log.info("Received Google OAuth code exchange request from IP: {}", request.getClientIp());
+        LoginResponse response = keycloakAuthService.loginWithGoogleCode(request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Authenticate via Google ID Token or Access Token.
+     */
+    @Operation(
+            summary = "Authenticate with Google ID Token via Keycloak",
+            description = "Authenticates using a Google signed ID token (e.g. from Google Sign-In SDK or One Tap) via Keycloak RFC 8693 " +
+                    "Token Exchange or federated verification, automatically provisioning the user in Keycloak and PostgreSQL."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Google Token validated and Keycloak JWT issued",
+                    content = @Content(schema = @Schema(implementation = LoginResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid Google Token",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    @PostMapping("/google/token")
+    public ResponseEntity<LoginResponse> loginWithGoogleToken(
+            @Valid @RequestBody GoogleTokenLoginRequest request,
+            HttpServletRequest httpRequest) {
+
+        request.setClientIp(httpRequest.getRemoteAddr());
+        request.setUserAgent(httpRequest.getHeader("User-Agent"));
+
+        log.info("Received Google Token login request from IP: {}", request.getClientIp());
+        LoginResponse response = keycloakAuthService.loginWithGoogleToken(request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get Keycloak Google Identity Provider configuration and setup guide.
+     */
+    @Operation(
+            summary = "Get Keycloak Google Identity Provider Setup Configuration",
+            description = "Returns the Keycloak broker redirect URI needed for Google Cloud Console OAuth 2.0 Client credentials, " +
+                    "the status of Keycloak's Google IDP configuration, and step-by-step setup instructions."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Keycloak Google IDP setup instructions and broker endpoint",
+                    content = @Content(schema = @Schema(implementation = GoogleIdpConfigResponse.class)))
+    })
+    @GetMapping("/google/config")
+    public ResponseEntity<GoogleIdpConfigResponse> getGoogleIdpConfig(
+            @Parameter(description = "Optional client callback URL to test", example = "http://localhost:3000/auth/callback")
+            @RequestParam(value = "client_callback_url", required = false) String clientCallbackUrl) {
+        GoogleIdpConfigResponse response = keycloakAuthService.getGoogleIdpConfig(clientCallbackUrl);
         return ResponseEntity.ok(response);
     }
 

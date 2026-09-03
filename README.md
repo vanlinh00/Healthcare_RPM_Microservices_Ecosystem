@@ -48,7 +48,7 @@ Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keyclo
 | :--- | :--- | :--- |
 | **`kong-gateway`** | `8000 / 8001` | Cloud-Native Kong API Gateway (DB-less declarative mode), CORS, Rate Limiting (300 req/min), Correlation ID, Prometheus metrics. |
 | **`service-registry`** | `8761` | Netflix Eureka Discovery Server with dual-zone heartbeat tracking and instance failover. |
-| **`user-auth-service`** | `8081` | Keycloak 24 OIDC integration, Direct Access Grant, 6 RBAC roles, TOTP 2FA, HIPAA audit logging. |
+| **`user-auth-service`** | `8081` | Keycloak 24 OIDC integration, Google Social Login (IdP Broker federation), Direct Access Grant, 6 RBAC roles, TOTP 2FA, HIPAA audit logging. |
 | **`appointment-order-service`** | `8082` | Saga State Machine (Orchestrator), Redisson distributed lock (`RLock`), Transactional Outbox, Strategy copay pricing. |
 | **`care-dispatch-service`** | `8083` | Weighted responder scoring algorithm (Proximity 40%, Specialty 30%, Workload 20%, Rating 10%). |
 | **`fulfillment-service`** | `8084` | Digital Proof of Delivery (POD) with HMAC-SHA256 signatures, cold-chain temperature anomaly breach tracking. |
@@ -59,7 +59,7 @@ Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keyclo
 
 ## 🔑 User & IAM Service (`user-auth-service`) APIs
 
-The User & IAM microservice manages authentication, authorization, Keycloak session management, and HIPAA compliance auditing.
+The User & IAM microservice manages authentication, authorization, Keycloak session management, Google Social Login (IdP federation), and HIPAA compliance auditing.
 
 ### 1. User Login
 - **Endpoint**: `POST /api/v1/auth/login`
@@ -143,6 +143,100 @@ The User & IAM microservice manages authentication, authorization, Keycloak sess
 - **Headers**: `Authorization: Bearer <access_token>` *(Requires `ADMIN` role)*
 - **Description**: Retrieves recent login, logout, and 2FA challenge events logged for HIPAA security monitoring.
 
+### 5. Google Social Login - Authorization URL
+- **Endpoint**: `GET /api/v1/auth/google/url`
+- **Query Parameter**: `redirect_uri` *(Optional, default: `http://localhost:3000/auth/callback`)*
+- **Description**: Generates the Keycloak OpenID Connect authorization URL configured with `kc_idp_hint=google`. When opened by clients (web/mobile browsers or popups), Keycloak immediately redirects to Google OAuth 2.0 consent, bypassing the standard Keycloak login screen.
+- **Response (`200 OK`)**:
+```json
+{
+  "auth_url": "http://localhost:8080/realms/healthcare-realm/protocol/openid-connect/auth?client_id=healthcare-api-gateway&response_type=code&scope=openid%20profile%20email%20roles&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fcallback&kc_idp_hint=google",
+  "keycloak_broker_endpoint": "http://localhost:8080/realms/healthcare-realm/broker/google/endpoint",
+  "client_id": "healthcare-api-gateway",
+  "realm": "healthcare-realm",
+  "provider": "google",
+  "redirect_uri": "http://localhost:3000/auth/callback"
+}
+```
+
+### 6. Google Social Login - Authorization Code Exchange
+- **Endpoint**: `POST /api/v1/auth/google/callback`
+- **Description**: Exchanges the authorization code emitted by Keycloak after Google federated authentication for signed RS256 JWT access and refresh tokens. Syncs user profile in Keycloak and PostgreSQL, assigns roles, and records a HIPAA audit log.
+- **Request Body**:
+```json
+{
+  "code": "91a18274-c089-4cb3-911e-08991be249a1.d8e01",
+  "redirect_uri": "http://localhost:3000/auth/callback",
+  "deviceId": "workstation-icu-01"
+}
+```
+- **Response (`200 OK`)**:
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "rt-google-7cb2a62cc46b3b01578f9140811c94574a45417ffceb256f",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_expires_in": 18000,
+  "session_state": "f17bf139-410b-4909-9446-b3788b7e0ac9",
+  "scope": "openid email profile healthcare-api roles",
+  "totp_required": false,
+  "totp_verified": true,
+  "user": {
+    "id": "usr-google-76c3c70c",
+    "email": "doctor.user@healthcare.org",
+    "username": "doctor.user@healthcare.org",
+    "firstName": "Google",
+    "lastName": "User",
+    "primaryRole": "PATIENT",
+    "roles": ["PATIENT", "default-roles-healthcare"],
+    "totpEnabled": false,
+    "active": true
+  }
+}
+```
+
+### 7. Google ID Token / Access Token Exchange (RFC 8693)
+- **Endpoint**: `POST /api/v1/auth/google/token`
+- **Description**: Authenticates using a Google signed ID token (e.g., from Google Sign-In SDK or One Tap) via Keycloak RFC 8693 Token Exchange or federated verification, automatically provisioning the user in Keycloak and PostgreSQL.
+- **Request Body**:
+```json
+{
+  "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwZDY...",
+  "deviceId": "dev-browser-client"
+}
+```
+
+### 8. Keycloak Google Identity Provider Setup & Broker Configuration
+- **Endpoint**: `GET /api/v1/auth/google/config`
+- **Description**: Returns Keycloak broker callback URIs, registration instructions for Google Cloud Console, and current Identity Provider configuration status.
+- **Response (`200 OK`)**:
+```json
+{
+  "configured": true,
+  "identity_provider_alias": "google",
+  "keycloak_broker_redirect_uri": "http://localhost:8080/realms/healthcare-realm/broker/google/endpoint",
+  "client_callback_url": "http://localhost:3000/auth/callback",
+  "setup_instructions": [
+    "1. Open Google Cloud Console -> APIs & Services -> Credentials",
+    "2. Create or select an OAuth 2.0 Client ID (Web Application type)",
+    "3. In Authorized redirect URIs, add: http://localhost:8080/realms/healthcare-realm/broker/google/endpoint",
+    "4. In Authorized JavaScript origins, add: http://localhost:3000 and http://localhost:8080",
+    "5. Open Keycloak Admin Console (http://localhost:8080) -> Realm: healthcare-realm",
+    "6. Go to Identity Providers -> Add provider -> Google",
+    "7. Paste Client ID & Client Secret from Google, toggle Trust Email = ON, and Save",
+    "8. Web and mobile applications can now call GET /api/v1/auth/google/url to launch Google login with Keycloak SSO"
+  ],
+  "metadata": {
+    "realm": "healthcare-realm",
+    "authServerUrl": "http://localhost:8080",
+    "clientId": "healthcare-api-gateway",
+    "syncMode": "IMPORT",
+    "trustEmail": true
+  }
+}
+```
+
 ---
 
 ## 📮 Postman Collection
@@ -150,7 +244,7 @@ The User & IAM microservice manages authentication, authorization, Keycloak sess
 A complete Postman Collection v2.1.0 is provided in `./postman/healthcare-user-auth-service.postman_collection.json`.
 
 It contains:
-- **Authentication & Sessions**: Login (Doctor/Admin), 2FA TOTP login, Token Refresh (OIDC), `/me` profile inspection, Logout / Keycloak session revocation.
+- **Authentication & Sessions**: Direct password login (Doctor/Admin), 2FA TOTP login, Token Refresh (OIDC), `/me` profile inspection, Logout / Keycloak session revocation, and **Google Social Login (IdP authorization URL, authorization code exchange, Google ID token login, and broker setup configuration)**.
 - **HIPAA 2FA & Verification**: Setup TOTP 2FA Secret & QR Code URI, Verify 6-digit TOTP, HIPAA Audit Logs query, Physician Medical License verification.
 - **Keycloak IAM Dynamic RBAC**: Create Realm & Composite Roles, Search & Query Roles, Get Role By Name, Update Role Metadata, Delete Roles.
 - **Composite Role Hierarchy**: Add and remove child sub-roles dynamically from parent composite roles.

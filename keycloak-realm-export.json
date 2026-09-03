@@ -644,5 +644,28 @@
         "LAB_TECH"
       ]
     }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google Social Login",
+      "providerId": "google",
+      "enabled": true,
+      "updateProfileFirstLoginMode": "on",
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${env.KEYCLOAK_GOOGLE_CLIENT_ID:google-oauth-client-id.apps.googleusercontent.com}",
+        "clientSecret": "${env.KEYCLOAK_GOOGLE_CLIENT_SECRET:google-oauth-client-secret}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true",
+        "guiOrder": "1"
+      }
+    }
   ]
 }

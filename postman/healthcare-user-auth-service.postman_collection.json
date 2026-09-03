@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b78ea53c-9072-44ac-9035-user-auth-service",
     "name": "Healthcare User Auth & Keycloak IAM Service",
-    "description": "Comprehensive Postman Collection for Healthcare User-Auth Service (Spring Boot 3.4 + Keycloak 24 IAM). Includes OIDC Authentication, TOTP 2FA, Session Management, HIPAA Audit Logs, Dynamic RBAC / Role & Permission Management, Composite Roles, User/Group Mappings, and Actuator Observability.",
+    "description": "Comprehensive Postman Collection for Healthcare User-Auth Service (Spring Boot 3.4 + Keycloak 24 IAM). Includes OIDC Authentication, Google Social Login (Keycloak IdP Broker), TOTP 2FA, Session Management, HIPAA Audit Logs, Dynamic RBAC / Role & Permission Management, Composite Roles, User/Group Mappings, and Actuator Observability.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -59,6 +59,21 @@
     {
       "key": "doctorId",
       "value": "DOC-98231",
+      "type": "string"
+    },
+    {
+      "key": "googleAuthCode",
+      "value": "sample-google-auth-code-4a9f1b",
+      "type": "string"
+    },
+    {
+      "key": "googleIdToken",
+      "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMDk4MjM0OTgxMjMiLCJlbWFpbCI6Imdvb2dsZS51c2VyQGhlYWx0aGNhcmUub3JnIiwibmFtZSI6Ikdvb2dsZSBVc2VyIn0.signature",
+      "type": "string"
+    },
+    {
+      "key": "clientCallbackUrl",
+      "value": "http://localhost:3000/auth/callback",
       "type": "string"
     }
   ],
@@ -275,6 +290,195 @@
               "path": ["api", "v1", "auth", "logout"]
             },
             "description": "Terminates Keycloak active session and revokes refresh token."
+          },
+          "response": []
+        },
+        {
+          "name": "1.7 Google SSO - Get Keycloak Authorization URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.test('Status code is 200', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "    });",
+                  "    pm.test('Contains Keycloak auth_url with kc_idp_hint=google', function () {",
+                  "        pm.expect(json.auth_url).to.be.a('string');",
+                  "        pm.expect(json.auth_url).to.include('kc_idp_hint=google');",
+                  "    });",
+                  "    pm.test('Contains keycloak_broker_endpoint', function () {",
+                  "        pm.expect(json.keycloak_broker_endpoint).to.be.a('string');",
+                  "        pm.expect(json.keycloak_broker_endpoint).to.include('/broker/google/endpoint');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google/url?redirect_uri={{clientCallbackUrl}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "google", "url"],
+              "query": [
+                {
+                  "key": "redirect_uri",
+                  "value": "{{clientCallbackUrl}}",
+                  "description": "Client callback redirect URI"
+                }
+              ]
+            },
+            "description": "Constructs the Keycloak OpenID Connect authorization URL configured with kc_idp_hint=google. Clients redirect the user to this URL to authenticate with their Google account via Keycloak."
+          },
+          "response": []
+        },
+        {
+          "name": "1.8 Google SSO - Exchange Authorization Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.access_token) {",
+                  "        pm.collectionVariables.set('accessToken', json.access_token);",
+                  "        console.log('Access token saved to collection variable.');",
+                  "    }",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "        console.log('Refresh token saved to collection variable.');",
+                  "    }",
+                  "    pm.test('Status code is 200 and access_token present', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        pm.expect(json.access_token).to.be.a('string');",
+                  "    });",
+                  "    pm.test('User identity provider is Google', function () {",
+                  "        if (json.decoded && json.decoded.identity_provider) {",
+                  "            pm.expect(json.decoded.identity_provider).to.eql('google');",
+                  "        }",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{googleAuthCode}}\",\n  \"redirect_uri\": \"{{clientCallbackUrl}}\",\n  \"deviceId\": \"WORKSTATION-ICU-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google/callback",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "google", "callback"]
+            },
+            "description": "Exchanges the authorization code returned by Keycloak after Google authentication for signed RS256 JWT access tokens and refresh tokens. Syncs user account and records HIPAA security audit log."
+          },
+          "response": []
+        },
+        {
+          "name": "1.9 Google SSO - Authenticate via Google ID Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.access_token) {",
+                  "        pm.collectionVariables.set('accessToken', json.access_token);",
+                  "    }",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "    }",
+                  "    pm.test('Status code is 200 and access_token present', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        pm.expect(json.access_token).to.be.a('string');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_token\": \"{{googleIdToken}}\",\n  \"deviceId\": \"WORKSTATION-ICU-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "google", "token"]
+            },
+            "description": "Authenticates using a Google signed ID token (e.g. from Google Sign-In SDK or One Tap) via Keycloak RFC 8693 Token Exchange or federated verification, automatically provisioning the user in Keycloak and PostgreSQL."
+          },
+          "response": []
+        },
+        {
+          "name": "1.10 Google SSO - Get Keycloak Google IdP Broker Config",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    pm.test('Status code is 200', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "    });",
+                  "    pm.test('Contains keycloak_broker_redirect_uri', function () {",
+                  "        pm.expect(json.keycloak_broker_redirect_uri).to.be.a('string');",
+                  "        pm.expect(json.keycloak_broker_redirect_uri).to.include('/broker/google/endpoint');",
+                  "    });",
+                  "    pm.test('Contains setup instructions array', function () {",
+                  "        pm.expect(json.setup_instructions).to.be.an('array');",
+                  "        pm.expect(json.setup_instructions.length).to.be.above(0);",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google/config?client_callback_url={{clientCallbackUrl}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "google", "config"],
+              "query": [
+                {
+                  "key": "client_callback_url",
+                  "value": "{{clientCallbackUrl}}",
+                  "description": "Optional client callback URL to test"
+                }
+              ]
+            },
+            "description": "Returns the Keycloak broker redirect URI needed for Google Cloud Console OAuth 2.0 Client credentials, the status of Keycloak's Google IDP configuration, and step-by-step setup instructions."
           },
           "response": []
         }
