@@ -1,8 +1,121 @@
 # Healthcare & Remote Patient Monitoring (RPM) Microservices Ecosystem
 
-Enterprise-grade, distributed, HIPAA-compliant microservices platform designed for real-time healthcare monitoring, clinical workflow automation, multi-role IAM, distributed appointment scheduling, and IoT emergency telemetry.
+Enterprise-grade, distributed, HIPAA-compliant microservices platform designed for real-time healthcare monitoring, clinical workflow automation, multi-role IAM, distributed appointment scheduling, telehealth chat, and IoT emergency telemetry.
 
-Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keycloak 24**, **PostgreSQL 16**, **Redisson / Redis 7.2**, **Apache Kafka (KRaft)**, and **Elasticsearch 8.17**.
+Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keycloak 24**, **PostgreSQL 16**, **Redisson / Redis 7.2**, **Apache Kafka (KRaft)**, **Elasticsearch 8.17**, **Kong API Gateway**, **Prometheus**, and **Grafana 11**.
+
+---
+
+## 🎓 Complete Skills & Competencies Roadmap (What You Will Learn)
+
+This project is engineered as an end-to-end masterclass in modern enterprise software engineering. By studying, running, and extending this codebase, you will gain hands-on proficiency in the following core disciplines:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   SKILLS & COMPETENCY MATRIX                                           │
+├──────────────────────────┬──────────────────────────┬──────────────────────────┬───────────────────────┤
+│ 1. Distributed Systems   │ 2. Security & IAM        │ 3. Real-Time & IoT       │ 4. DevOps & SRE       │
+│ • Saga Orchestrator      │ • Keycloak 24 OIDC       │ • WebSockets & STOMP     │ • Docker Compose      │
+│ • Transactional Outbox   │ • OAuth 2.0 & RFC 8693   │ • Redis Pub/Sub          │ • Kubernetes (K8s)    │
+│ • Distributed Locks      │ • Google IdP Broker      │ • IoT Telemetry Stream   │ • Prometheus 2.53     │
+│ • Kafka KRaft Messaging  │ • Dynamic RBAC           │ • Elasticsearch 8.17     │ • Grafana 11 As-Code  │
+│ • Kong API Gateway       │ • TOTP 2FA (RFC 6238)    │ • Presence & CCU         │ • HikariCP Tuning     │
+│ • Eureka Discovery       │ • HIPAA Audit Logging    │ • Cold-Chain Sensor Pod  │ • Alerting Rules      │
+└──────────────────────────┴──────────────────────────┴──────────────────────────┴───────────────────────┘
+```
+
+---
+
+### 1. Enterprise Java & Backend Engineering
+- **Modern Java 17 LTS**: Immutability with Java Records, pattern matching for `switch`, sealed types, advanced Stream API pipelines, and modern concurrency (`CompletableFuture`, virtual-thread-ready architecture).
+- **Spring Boot 3.4 & Spring Cloud 2024**:
+  - Declarative REST APIs with Spring Web and OpenAPI 3.0 (SpringDoc).
+  - Spring Data JPA with PostgreSQL, composite keys, custom native queries, and schema lifecycle control.
+  - Connection pool tuning using **HikariCP** (leak detection, connection timeouts, maximum pool size balancing).
+  - Production readiness via **Spring Boot Actuator** and **Micrometer** telemetry exporters.
+- **Maven Multi-Module Architecture**:
+  - Parent POM dependency inheritance and BOM (Bill of Materials) version synchronization.
+  - Strict profile isolation for local development, staging, and containerized deployment.
+
+---
+
+### 2. Distributed Systems & Advanced Architectural Patterns
+- **Saga Orchestration Pattern (`appointment-order-service`)**:
+  - State machine orchestrating multi-service distributed transactions: Order Creation ➔ Slot Reservation ➔ Insurance Billing ➔ Notification.
+  - Automatic triggering of **Compensating Transactions (Rollbacks)** if downstream services fail.
+- **Transactional Outbox Pattern**:
+  - Guaranteed event delivery without dual-write inconsistencies between PostgreSQL and Kafka.
+  - Atomic local database commits combined with asynchronous outbox polling worker threads.
+- **Distributed Locking with Redisson (`RLock`)**:
+  - High-precision Redis distributed locks (`lock:appointment:slot:{doctorId}:{time}`) with lease timeouts to prevent race conditions and concurrent double-booking across multi-instance pods.
+- **Event-Driven Architecture (EDA) with Apache Kafka**:
+  - Operating Kafka in modern **KRaft mode** (no ZooKeeper dependency).
+  - High-throughput partitioning, consumer groups, idempotency, and consumer lag monitoring.
+- **API Gateway Pattern (`kong-gateway`)**:
+  - Cloud-native, DB-less declarative Kong routing (`kong.yml`).
+  - Centralized Rate Limiting (300 req/min), CORS policy enforcement, Correlation ID propagation, and WebSocket upgrade proxying.
+- **Service Discovery & Client-Side Balancing (`service-registry`)**:
+  - Netflix Eureka cluster registration, instance lease renewals, dual-zone heartbeats, and failover routing.
+- **Behavioral Design Patterns**:
+  - **Strategy Pattern**: Pluggable copay pricing algorithms (`CopayPricingStrategy`) and multi-channel notification dispatchers.
+  - **Weighted Scoring Algorithm**: Clinical dispatch engine scoring responder distance (40%), specialty match (30%), active workload (20%), and rating (10%).
+
+---
+
+### 3. Identity, Access Management (IAM) & HIPAA Compliance
+- **Keycloak 24 OIDC & OAuth 2.0**:
+  - Direct Access Grants (Resource Owner Password Credentials), Authorization Code flow, and Token Refresh.
+  - Public-key asymmetric JWT signature verification (**RS256**) with JWKS endpoints.
+  - **RFC 8693 OAuth 2.0 Token Exchange** for cross-service identity delegation.
+- **Federated Social Identity (Google Social Login)**:
+  - Keycloak Identity Provider (IdP) Broker configuration with `kc_idp_hint=google`.
+  - Seamless Google OAuth 2.0 login with automatic user account provisioning and role synchronization.
+- **Fine-Grained Dynamic Role-Based Access Control (RBAC)**:
+  - 6 clinical roles: `PATIENT`, `DOCTOR`, `NURSE`, `PHARMACIST`, `LAB_TECH`, and `ADMIN`.
+  - Composite role hierarchies, dynamic role-mapping management via Keycloak Admin REST APIs.
+- **Two-Factor Authentication (2FA/MFA)**:
+  - Time-based One-Time Password (TOTP) algorithm compliance (**RFC 6238**).
+  - Secure secret generation, QR Code URI generation (`otpauth://`), and verification filters.
+- **HIPAA Compliance & Zero-Trust Security**:
+  - Immutable audit logs capturing user IDs, timestamps, client IPs, user agents, and security events.
+  - Password hashing with PBKDF2/BCrypt and digital signatures (**HMAC-SHA256**) for pharmaceutical Proof of Delivery (POD).
+
+---
+
+### 4. Real-Time Communication, Telehealth & IoT Streaming
+- **WebSocket & STOMP Protocol (`chat-service` & `tracking-service`)**:
+  - Full-duplex bidirectional communication channels over SockJS and raw WebSockets.
+  - Topic subscription routing (`/topic/consultation.{roomId}`, `/topic/vitals.{patientId}`).
+- **Redis Pub/Sub & Presence Tracking**:
+  - Real-time user presence tracking (online, offline, active CCU) across clustered application nodes.
+  - Channel-based pub/sub message synchronization ensuring multi-node scalability.
+- **Continuous IoT Medical Telemetry**:
+  - High-frequency ingestion of clinical vitals (ECG, Heart Rate, SpO2, Blood Pressure, Blood Glucose).
+  - Cold-chain temperature boundary tracking (`2°C - 8°C`) for sensitive biologics and vaccine deliveries.
+- **Elasticsearch 8.17 Distributed Search**:
+  - Time-series patient vital indexing, high-speed metric aggregation, and HIPAA audit log analytics.
+
+---
+
+### 5. Observability, Site Reliability Engineering (SRE) & Monitoring
+- **Prometheus 2.53 Metrics Collection**:
+  - Pull-based scraping of all 8 microservices, Kong Gateway, and Keycloak via `/actuator/prometheus`.
+  - Custom Micrometer instrumentation: CCU gauges (`chat_active_ccu`), Saga status counters, and HTTP latency histograms.
+- **PromQL & Proactive Alert Rules Engine (`alert.rules.yml`)**:
+  - Automated evaluation of 11 critical and warning alerts (Instance Down, 5xx Error Rate > 5%, P95 Latency > 800ms, JVM Heap Exhaustion > 85%, HikariCP Saturation > 90%, Cold-Chain Breaches, Code Blue Patient Critical Vitals, HIPAA Brute Force Spikes, and Chat CCU Saturation).
+- **Grafana 11 Dashboarding as Code**:
+  - Pre-provisioned dashboards for System Overview, JVM & Infrastructure Health, and Clinical RPM / HIPAA Analytics.
+- **Fault Injection & Chaos Engineering**:
+  - Interactive telemetry simulation triggering real-world alerts to test system resilience.
+
+---
+
+### 6. DevOps, Containerization & Cloud-Native Deployment
+- **Docker & Docker Compose**:
+  - Multi-stage Docker builds optimizing image layer caching and reducing container attack surface.
+  - Complete multi-container orchestration with dependency health checks (`depends_on: condition: service_healthy`).
+- **Kubernetes (K8s) Production Manifests**:
+  - Modular manifests: Namespaces, ConfigMaps, Secrets, StatefulSets (PostgreSQL, Redis, Kafka), Deployments, ClusterIP Services, Ingress, and Horizontal Pod Autoscaling (HPA).
 
 ---
 
@@ -33,321 +146,73 @@ Built with **Java 17**, **Spring Boot 3.4**, **Spring Cloud (2024.0)**, **Keyclo
         │             │ saga-events, alerts   │               │
         │             └───────┬───────────────┘               │
         │                     │                               │
-┌───────▼────────┐    ┌───────▼────────┐              ┌───────▼────────┐
-│   tracking-    │    │ notification-  │              │ Service        │
-│   service      │    │ service        │              │ Registry       │
-│   (Port 8085)  │    │ (Port 8086)    │              │ (Eureka 8761)  │
-└────────────────┘    └────────────────┘              └────────────────┘
+┌───────▼────────┐    ┌───────▼────────┐              ┌───────▼────────┐    ┌────────────────┐
+│   tracking-    │    │ notification-  │              │  chat-service  │    │ Service        │
+│   service      │    │ service        │              │  (Port 8087)   │    │ Registry       │
+│   (Port 8085)  │    │ (Port 8086)    │              │  (WebSocket)   │    │ (Eureka 8761)  │
+└────────────────┘    └────────────────┘              └────────────────┘    └────────────────┘
 ```
 
 ---
 
 ## 📦 Microservices Directory & Responsibilities
 
-| Service Name | Port | Primary Responsibilities & Technologies |
+| Service Name | Port | Primary Responsibilities & Technologies Learned |
 | :--- | :--- | :--- |
-| **`kong-gateway`** | `8000 / 8001` | Cloud-Native Kong API Gateway (DB-less declarative mode), CORS, Rate Limiting (300 req/min), Correlation ID, Prometheus metrics. |
+| **`kong-gateway`** | `8000 / 8001` | Cloud-Native API Gateway, DB-less declarative routing, Rate Limiting (300 req/min), CORS, Correlation ID, WebSocket proxying. |
 | **`service-registry`** | `8761` | Netflix Eureka Discovery Server with dual-zone heartbeat tracking and instance failover. |
 | **`user-auth-service`** | `8081` | Keycloak 24 OIDC integration, Google Social Login (IdP Broker federation), Direct Access Grant, 6 RBAC roles, TOTP 2FA, HIPAA audit logging. |
 | **`appointment-order-service`** | `8082` | Saga State Machine (Orchestrator), Redisson distributed lock (`RLock`), Transactional Outbox, Strategy copay pricing. |
 | **`care-dispatch-service`** | `8083` | Weighted responder scoring algorithm (Proximity 40%, Specialty 30%, Workload 20%, Rating 10%). |
-| **`fulfillment-service`** | `8084` | Digital Proof of Delivery (POD) with HMAC-SHA256 signatures, cold-chain temperature anomaly breach tracking. |
+| **`fulfillment-service`** | `8084` | Digital Proof of Delivery (POD) with HMAC-SHA256 signatures, cold-chain temperature anomaly breach tracking (`2°C - 8°C`). |
 | **`tracking-service`** | `8085` | Real-time IoT vitals ingestion (ECG, HR, SpO2, BP, Glucose), WebSocket streaming, Elasticsearch 8.17 indexing. |
 | **`notification-service`** | `8086` | Event-driven Kafka consumer, Strategy Factory pattern (Email, SMS, Push, Zalo ZNS), Code Blue priority executor. |
+| **`chat-service`** | `8087` | Realtime Telehealth Consultation chat, WebSocket/STOMP protocol, Redis presence & CCU tracking, PostgreSQL message persistence. |
 
 ---
 
-## 🔑 User & IAM Service (`user-auth-service`) APIs
+## 🔑 Core API Endpoints
 
-The User & IAM microservice manages authentication, authorization, Keycloak session management, Google Social Login (IdP federation), and HIPAA compliance auditing.
+### 1. Authentication & IAM (`user-auth-service`)
+- `POST /api/v1/auth/login`: Authenticate with Keycloak Direct Access Grant and optional TOTP 2FA.
+- `POST /api/v1/auth/logout`: Revoke active Keycloak sessions and refresh tokens.
+- `POST /api/v1/auth/refresh`: Exchange refresh token for a new RS256 JWT access token.
+- `GET /api/v1/auth/google/url`: Launch Keycloak federated Google Social Login.
+- `POST /api/v1/auth/google/callback`: Exchange Google authorization code for JWT tokens and sync user profile.
+- `POST /api/v1/auth/google/token`: RFC 8693 Token Exchange using Google signed ID tokens.
+- `GET /api/v1/auth/audit-logs`: Query immutable HIPAA security audit events.
 
-### 1. User Login
-- **Endpoint**: `POST /api/v1/auth/login`
-- **Description**: Authenticates users using Keycloak OpenID Connect Direct Access Grants (Resource Owner Password Credentials) and enforces TOTP 2FA.
-- **Request Body**:
-```json
-{
-  "usernameOrEmail": "doctor_emily",
-  "password": "Password123!",
-  "totpCode": "849201",
-  "deviceId": "workstation-clinician-04"
-}
-```
-- **Response (`200 OK`)**:
-```json
-{
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "rt-8f92a3c7e01b4d...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "refresh_expires_in": 18000,
-  "session_state": "sess-4e782a10",
-  "totp_required": false,
-  "totp_verified": true,
-  "user": {
-    "id": "usr-doc-204",
-    "email": "emily.vance@healthcare.org",
-    "username": "doctor_emily",
-    "firstName": "Emily",
-    "lastName": "Vance, MD",
-    "primaryRole": "DOCTOR",
-    "roles": ["DOCTOR", "default-roles-healthcare"],
-    "totpEnabled": true,
-    "active": true
-  }
-}
-```
+### 2. Clinical Appointments & Distributed Saga (`appointment-order-service`)
+- `POST /api/v1/appointments`: Initiate Saga distributed transaction with Redisson `RLock` slot protection.
+- `GET /api/v1/appointments/:id`: Retrieve appointment state and Saga execution status.
 
-### 2. User Logout & Session Revocation
-- **Endpoint**: `POST /api/v1/auth/logout`
-- **Headers**: `Authorization: Bearer <access_token>`
-- **Description**: Executes Keycloak Single Sign-Out by invalidating the user's refresh token and terminating the active session.
-- **Request Body**:
-```json
-{
-  "refresh_token": "rt-8f92a3c7e01b4d...",
-  "all_sessions": false
-}
-```
-- **Response (`200 OK`)**:
-```json
-{
-  "status": "LOGGED_OUT",
-  "message": "Successfully logged out from Keycloak IAM. Session and refresh tokens revoked.",
-  "revokedAt": "2026-08-27T09:15:30Z",
-  "keycloakSessionRevoked": true
-}
-```
+### 3. Realtime Telehealth Chat (`chat-service`)
+- `WS /ws-chat`: STOMP over SockJS endpoint for interactive consultation channels.
+- `GET /api/v1/chat/rooms`: List active consultation rooms (Doctor-Patient, Care Team, Emergency Code Blue, Triage).
+- `POST /api/v1/chat/rooms/:roomId/messages`: Send messages with clinical role metadata.
+- `GET /api/v1/chat/presence`: Inspect active CCU connections and Redis cluster heartbeat status.
 
-### 3. Refresh Access Token
-- **Endpoint**: `POST /api/v1/auth/refresh`
-- **Request Body**:
-```json
-{
-  "refresh_token": "rt-8f92a3c7e01b4d..."
-}
-```
-- **Response (`200 OK`)**:
-```json
-{
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "rt-new-token-9b3...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "session_state": "sess-4e782a10"
-}
-```
-
-### 4. HIPAA Audit Logs
-- **Endpoint**: `GET /api/v1/auth/audit-logs`
-- **Headers**: `Authorization: Bearer <access_token>` *(Requires `ADMIN` role)*
-- **Description**: Retrieves recent login, logout, and 2FA challenge events logged for HIPAA security monitoring.
-
-### 5. Google Social Login - Authorization URL
-- **Endpoint**: `GET /api/v1/auth/google/url`
-- **Query Parameter**: `redirect_uri` *(Optional, default: `http://localhost:3000/auth/callback`)*
-- **Description**: Generates the Keycloak OpenID Connect authorization URL configured with `kc_idp_hint=google`. When opened by clients (web/mobile browsers or popups), Keycloak immediately redirects to Google OAuth 2.0 consent, bypassing the standard Keycloak login screen.
-- **Response (`200 OK`)**:
-```json
-{
-  "auth_url": "http://localhost:8080/realms/healthcare-realm/protocol/openid-connect/auth?client_id=healthcare-api-gateway&response_type=code&scope=openid%20profile%20email%20roles&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fcallback&kc_idp_hint=google",
-  "keycloak_broker_endpoint": "http://localhost:8080/realms/healthcare-realm/broker/google/endpoint",
-  "client_id": "healthcare-api-gateway",
-  "realm": "healthcare-realm",
-  "provider": "google",
-  "redirect_uri": "http://localhost:3000/auth/callback"
-}
-```
-
-### 6. Google Social Login - Authorization Code Exchange
-- **Endpoint**: `POST /api/v1/auth/google/callback`
-- **Description**: Exchanges the authorization code emitted by Keycloak after Google federated authentication for signed RS256 JWT access and refresh tokens. Syncs user profile in Keycloak and PostgreSQL, assigns roles, and records a HIPAA audit log.
-- **Request Body**:
-```json
-{
-  "code": "91a18274-c089-4cb3-911e-08991be249a1.d8e01",
-  "redirect_uri": "http://localhost:3000/auth/callback",
-  "deviceId": "workstation-icu-01"
-}
-```
-- **Response (`200 OK`)**:
-```json
-{
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "rt-google-7cb2a62cc46b3b01578f9140811c94574a45417ffceb256f",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "refresh_expires_in": 18000,
-  "session_state": "f17bf139-410b-4909-9446-b3788b7e0ac9",
-  "scope": "openid email profile healthcare-api roles",
-  "totp_required": false,
-  "totp_verified": true,
-  "user": {
-    "id": "usr-google-76c3c70c",
-    "email": "doctor.user@healthcare.org",
-    "username": "doctor.user@healthcare.org",
-    "firstName": "Google",
-    "lastName": "User",
-    "primaryRole": "PATIENT",
-    "roles": ["PATIENT", "default-roles-healthcare"],
-    "totpEnabled": false,
-    "active": true
-  }
-}
-```
-
-### 7. Google ID Token / Access Token Exchange (RFC 8693)
-- **Endpoint**: `POST /api/v1/auth/google/token`
-- **Description**: Authenticates using a Google signed ID token (e.g., from Google Sign-In SDK or One Tap) via Keycloak RFC 8693 Token Exchange or federated verification, automatically provisioning the user in Keycloak and PostgreSQL.
-- **Request Body**:
-```json
-{
-  "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwZDY...",
-  "deviceId": "dev-browser-client"
-}
-```
-
-### 8. Keycloak Google Identity Provider Setup & Broker Configuration
-- **Endpoint**: `GET /api/v1/auth/google/config`
-- **Description**: Returns Keycloak broker callback URIs, registration instructions for Google Cloud Console, and current Identity Provider configuration status.
-- **Response (`200 OK`)**:
-```json
-{
-  "configured": true,
-  "identity_provider_alias": "google",
-  "keycloak_broker_redirect_uri": "http://localhost:8080/realms/healthcare-realm/broker/google/endpoint",
-  "client_callback_url": "http://localhost:3000/auth/callback",
-  "setup_instructions": [
-    "1. Open Google Cloud Console -> APIs & Services -> Credentials",
-    "2. Create or select an OAuth 2.0 Client ID (Web Application type)",
-    "3. In Authorized redirect URIs, add: http://localhost:8080/realms/healthcare-realm/broker/google/endpoint",
-    "4. In Authorized JavaScript origins, add: http://localhost:3000 and http://localhost:8080",
-    "5. Open Keycloak Admin Console (http://localhost:8080) -> Realm: healthcare-realm",
-    "6. Go to Identity Providers -> Add provider -> Google",
-    "7. Paste Client ID & Client Secret from Google, toggle Trust Email = ON, and Save",
-    "8. Web and mobile applications can now call GET /api/v1/auth/google/url to launch Google login with Keycloak SSO"
-  ],
-  "metadata": {
-    "realm": "healthcare-realm",
-    "authServerUrl": "http://localhost:8080",
-    "clientId": "healthcare-api-gateway",
-    "syncMode": "IMPORT",
-    "trustEmail": true
-  }
-}
-```
+### 4. Telemetry & Observability (`Prometheus` & `Grafana`)
+- `GET /actuator/prometheus`: OpenMetrics scrape endpoint on every microservice.
+- `GET /api/v1/monitoring/overview`: Aggregated system availability, KPIs, and firing alerts.
+- `GET /api/v1/monitoring/prometheus/targets`: Scrape targets status, scrape duration, and health.
+- `GET /api/v1/monitoring/prometheus/alerts`: Evaluated Prometheus alerting rules (`firing` vs `inactive`).
+- `POST /api/v1/monitoring/simulate`: Inject test scenarios (`coldchain_breach`, `vital_spike`, `5xx_spike`, `reset`).
 
 ---
 
 ## 📮 Postman Collection
 
-A complete Postman Collection v2.1.0 is provided in `./postman/healthcare-user-auth-service.postman_collection.json`.
-
-It contains:
-- **Authentication & Sessions**: Direct password login (Doctor/Admin), 2FA TOTP login, Token Refresh (OIDC), `/me` profile inspection, Logout / Keycloak session revocation, and **Google Social Login (IdP authorization URL, authorization code exchange, Google ID token login, and broker setup configuration)**.
-- **HIPAA 2FA & Verification**: Setup TOTP 2FA Secret & QR Code URI, Verify 6-digit TOTP, HIPAA Audit Logs query, Physician Medical License verification.
-- **Keycloak IAM Dynamic RBAC**: Create Realm & Composite Roles, Search & Query Roles, Get Role By Name, Update Role Metadata, Delete Roles.
-- **Composite Role Hierarchy**: Add and remove child sub-roles dynamically from parent composite roles.
-- **User & Group Role Mappings**: Assign/Revoke direct roles to Keycloak users, Assign/Revoke roles to groups, and Audit complete Effective Permissions.
-- **Actuator & Observability**: Health checks and Prometheus metrics endpoints.
-- **Automated Token Management**: Post-response test scripts automatically extract and store `access_token` and `refresh_token` into collection variables for subsequent authenticated calls.
-
----
-
-## ⚙️ Key Architectural Patterns Implemented
-
-1. **Saga Orchestration Pattern (`appointment-order-service`)**:
-   - Manages distributed transactions across Services (Order Creation ➔ Provider Reservation ➔ Insurance Billing ➔ Dispatch / Fulfillment).
-   - Automatically issues compensation transactions (Rollbacks) upon unexpected step failures.
-
-2. **Distributed Locking with Redisson (`RLock`)**:
-   - Acquires distributed lock keys (`lock:appointment:slot:{doctorId}:{time}`) to prevent concurrent double-booking across multi-instance pods.
-
-3. **Transactional Outbox Pattern**:
-   - Eliminates dual-write anomalies by writing domain entities and outbox events within a single ACID PostgreSQL transaction, published to Kafka via a scheduled de-queue worker.
-
-4. **Strategy Pattern for Pricing & Dispatch**:
-   - `CopayPricingStrategy`: Dynamically calculates patient copays based on consultation type (`Standard`, `Specialist`, `Emergency`).
-   - `CareDispatchStrategy`: Computes multi-attribute weighted scores to assign optimal first-responders.
-
-5. **Cold-Chain Sensor Breach Verification**:
-   - Tracks medication temperature conditions, validating IoT sensor records and creating HMAC-SHA256 signed Proof of Delivery records.
-
----
-
-## 📊 Observability & Monitoring System (Prometheus & Grafana)
-
-The platform includes an enterprise-grade observability stack combining **Prometheus 2.53** and **Grafana 11.1** for real-time telemetry, JVM health analysis, clinical anomaly tracking, and HIPAA security audit monitoring.
-
-### 1. Prometheus Architecture & Scrape Configuration (`prometheus.yml`)
-Scrapes all microservices, API Gateways, and IAM providers via `15s` polling intervals:
-
-| Scrape Target | Port / Metric Path | Scraped Telemetry & Protocol |
-| :--- | :--- | :--- |
-| **`prometheus`** | `9090 /metrics` | Prometheus TSDB storage, scrape durations, and compaction metrics |
-| **`kong-gateway`** | `8001 /metrics` | HTTP requests/sec, P95/P99 latency, upstream connection pools, status codes |
-| **`keycloak-iam`** | `8080 /metrics` | Active user sessions, login successes/failures, token exchanges |
-| **`service-registry`** | `8761 /actuator/prometheus` | Eureka registered instances, lease renewal rates, heartbeat sync |
-| **`user-auth-service`** | `8081 /actuator/prometheus` | OIDC token latency, TOTP validations, HIPAA security audit events |
-| **`appointment-order-service`** | `8082 /actuator/prometheus` | Saga transitions, compensation rollbacks, Redisson `RLock` wait times |
-| **`care-dispatch-service`** | `8083 /actuator/prometheus` | Nurse dispatch scoring latency, responder assignment throughput |
-| **`fulfillment-service`** | `8084 /actuator/prometheus` | Cold-chain IoT temperatures (`2°C - 8°C`), digital POD signatures |
-| **`tracking-service`** | `8085 /actuator/prometheus` | Patient vital signs (HR, SpO2), WebSocket RPM stream counts, ES queries |
-| **`notification-service`** | `8086 /actuator/prometheus` | Code-Blue thread pool saturation, Kafka consumer lag, dispatch latency |
-
-### 2. Evaluated Alerting Rules (`alert.rules.yml`)
-Configured with 10 critical and warning alerting rules:
-- **`MicroserviceInstanceDown`**: Triggers when `up == 0` for >1 minute (Critical).
-- **`HighHttp5xxErrorRate`**: Triggers when 5xx errors exceed 5.0% over 5m window (Critical).
-- **`HighResponseTimeP95`**: Triggers when P95 HTTP latency exceeds 800ms (Warning).
-- **`JvmHeapMemoryExhaustion`**: Triggers when JVM heap exceeds 85% capacity (Warning).
-- **`JvmGarbageCollectionStall`**: Triggers when GC pause exceeds 1.5s (Warning).
-- **`HikariCpPoolSaturation`**: Triggers when active database connections reach 90% of pool (Critical).
-- **`ColdChainTemperatureAnomaly`**: Triggers when medical shipment temp is `< 2°C` or `> 8°C` (Critical).
-- **`PatientCriticalVitalAnomaly`**: Triggers Code-Blue notification if patient HR `> 140` or SpO2 `< 90%` (Emergency).
-- **`HipaaBruteForceAuthSpike`**: Triggers if failed authentications exceed 10/min (Critical).
-- **`KafkaConsumerLagHigh`**: Triggers if consumer group lag exceeds 500 records for >3m (Warning).
-
-### 3. Provisioned Grafana 11 Dashboards (`/grafana/dashboards/`)
-Dashboards are automatically mounted and pre-configured via `/grafana/provisioning/`:
-1. **`healthcare-microservices-overview.json`**:
-   - System Availability gauge (`up`) across all microservices
-   - Real-time HTTP Request Rate (RPS) per service
-   - P95 / P99 Latency Heatmaps
-   - HTTP 2xx / 4xx / 5xx Status Code distribution
-2. **`jvm-and-infrastructure.json`**:
-   - JVM Heap memory consumption vs max limit
-   - Garbage Collector (G1 / ZGC) pause durations
-   - Process & System CPU utilization percentages
-   - HikariCP Active vs Idle connection pool metrics
-   - Kafka Topic ingestion rates & consumer group lag
-3. **`clinical-rpm-and-hipaa.json`**:
-   - Continuous ICU Bed & RPM Wearable telemetry streams (HR bpm, SpO2 %)
-   - Fulfillment Cold-Chain temperature range bounds (2°C - 8°C safe zone)
-   - HIPAA Security Audit events (Auth success, Failed logins, TOTP 2FA, Google SSO)
-   - Distributed Saga transaction state tracking (Completions vs Rollbacks)
-
-### 4. Kubernetes Deployment Manifest (`k8s/06-monitoring-prometheus-grafana.yaml`)
-Includes ConfigMaps for scrape configs and alert rules, Persistent Deployments, and ClusterIP Services ready for Kubernetes cluster deployment:
-```bash
-kubectl apply -f k8s/06-monitoring-prometheus-grafana.yaml
+A complete Postman Collection v2.1.0 is provided in:
+```
+./postman/healthcare-user-auth-service.postman_collection.json
 ```
 
-### 5. Telemetry & Simulation API Endpoints
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| **`/actuator/prometheus`** | `GET` | OpenMetrics text format scrape endpoint for Prometheus |
-| **`/api/v1/monitoring/overview`** | `GET` | High-level system KPIs, target summaries, and active firing alerts |
-| **`/api/v1/monitoring/prometheus/targets`** | `GET` | Active Prometheus scrape targets, scrape intervals, and health status |
-| **`/api/v1/monitoring/prometheus/alerts`** | `GET` | Live evaluated alerting rules with status (`inactive`, `firing`) |
-| **`/api/v1/monitoring/prometheus/query`** | `GET` | PromQL query execution engine (`?query=up`) |
-| **`/api/v1/monitoring/grafana/dashboards`** | `GET` | Catalog of provisioned Grafana dashboards |
-| **`/api/v1/monitoring/grafana/dashboards/:uid`** | `GET` | Exportable Grafana dashboard JSON models |
-| **`/api/v1/monitoring/simulate`** | `POST` | Fault injection for alerts (`coldchain_breach`, `5xx_spike`, `vital_spike`, `reset`) |
+It includes automated pre-request and post-response scripts to store JWT tokens, test 2FA verification, manage dynamic Keycloak roles, query HIPAA audit logs, and test Google SSO integration.
 
 ---
 
-## 🚀 Quickstart & Local Setup
+## 🚀 Quickstart & Local Execution
 
 ### Prerequisites
 - **JDK 17** (Eclipse Temurin / OpenJDK 17)
@@ -355,13 +220,9 @@ kubectl apply -f k8s/06-monitoring-prometheus-grafana.yaml
 - **Docker & Docker Compose**
 - **Node.js 20+** & **npm**
 
-### Step 1: Clone and Start Backing Infrastructure
+### Step 1: Start Backing Infrastructure
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd healthcare-rpm-ecosystem
-
-# Launch PostgreSQL, Redis, Kafka, Keycloak, and Elasticsearch
+# Launch PostgreSQL, Redis, Kafka, Keycloak, Elasticsearch, Kong, Prometheus, and Grafana
 docker compose up -d
 ```
 
@@ -371,61 +232,55 @@ docker compose up -d
 mvn clean package -DskipTests
 ```
 
-### Step 3: Run the Services
-You can run individual Spring Boot applications or start them in sequence:
+### Step 3: Run the Microservices
+You can run services individually via Spring Boot:
 ```bash
-# 1. Service Registry
-java -jar microservices/service-registry/target/service-registry-1.0.0-SNAPSHOT.jar
-
-# 2. User & Auth Service
+# Example: Start User & Auth Service
 java -jar microservices/user-auth-service/target/user-auth-service-1.0.0-SNAPSHOT.jar
 
-# 3. Appointment & Order Service
-java -jar microservices/appointment-order-service/target/appointment-order-service-1.0.0-SNAPSHOT.jar
-
-# 4. Kong API Gateway
-# Managed via Docker Compose (Port 8000 Proxy / 8001 Admin)
-docker compose up -d kong
+# Example: Start Chat Service
+java -jar microservices/chat-service/target/chat-service-1.0.0-SNAPSHOT.jar
 ```
 
-### Step 4: Run the Observability & Interactive Console UI
+### Step 4: Run the Interactive Management Dashboard
 ```bash
 npm install
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser to access the control center.
+Open [http://localhost:3000](http://localhost:3000) to access the interactive web management console, live consultation chat, and observability telemetry center.
 
 ---
 
 ## ☸️ Kubernetes Deployment
 
-Production-ready Kubernetes manifests are provided under the `/k8s` directory:
+Deploy the entire ecosystem to a Kubernetes cluster using the manifests in `/k8s`:
 
 ```bash
 # Apply namespace, ConfigMaps, and Secrets
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/01-namespace-config-secrets.yaml
 
-# Deploy Stateful infrastructure
-kubectl apply -f k8s/postgres-statefulset.yaml
-kubectl apply -f k8s/redis-statefulset.yaml
-kubectl apply -f k8s/kafka-statefulset.yaml
+# Deploy stateful infrastructure (Postgres, Redis, Kafka, Keycloak)
+kubectl apply -f k8s/02-backing-services-statefulsets.yaml
 
-# Deploy Microservices, HPA, and Ingress
-kubectl apply -f k8s/deployments/
-kubectl apply -f k8s/ingress.yaml
-kubectl apply -f k8s/hpa.yaml
+# Deploy all microservices
+kubectl apply -f k8s/03-microservices-deployments.yaml
+
+# Deploy API Gateway and Ingress
+kubectl apply -f k8s/04-kong-gateway-ingress.yaml
+
+# Deploy Prometheus and Grafana Observability
+kubectl apply -f k8s/06-monitoring-prometheus-grafana.yaml
 ```
 
 ---
 
-## 🛡️ Security & HIPAA Compliance
+## 🛡️ HIPAA Compliance & Security Highlights
 
-- **Stateless Bearer Authentication**: Keycloak RS256 asymmetric public-key signature verification at the API Gateway.
-- **Role-Based Access Control (RBAC)**: Enforces `PATIENT`, `DOCTOR`, `NURSE`, `PHARMACIST`, `LAB_TECH`, and `ADMIN` authority levels.
-- **Audit Trails**: Security and clinical operations are recorded in immutable audit tables with client IP, timestamp, and user agents.
-- **Zero-Trust Network**: Downstream services validate claims passed by the API Gateway's `JwtAuthenticationRelayFilter`.
+- **Stateless Bearer Authentication**: Keycloak RS256 asymmetric public-key signature verification.
+- **Granular RBAC**: Strict role boundaries (`PATIENT`, `DOCTOR`, `NURSE`, `PHARMACIST`, `LAB_TECH`, `ADMIN`).
+- **Audit Trails**: Non-repudiable audit records with timestamps, client IPs, and user agents.
+- **Zero-Trust Token Propagation**: Gateway-level claim validation and downstream header relay.
+- **Cryptographic Integrity**: HMAC-SHA256 digital signatures for critical medication handoffs.
 
 ---
 
