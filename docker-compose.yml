@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ----------------------------------------------------
   # PostgreSQL (Multi-database instance for Microservices)
@@ -148,7 +146,7 @@ services:
   # Kong API Gateway (DB-less Declarative Mode)
   # ----------------------------------------------------
   kong:
-    image: kong:3.7-alpine
+    image: kong:3.7
     container_name: healthcare-kong-gateway
     environment:
       KONG_DATABASE: "off"
