@@ -224,6 +224,17 @@ async function startServer() {
       health: '100% OK',
       role: 'Multi-channel (Email, SMS, Push, Zalo), Code-Blue isolated thread pools, Kafka event consumer',
       traffic: '350 msgs/s'
+    },
+    {
+      id: 'chat-service',
+      name: 'Realtime Chat & Telehealth Messaging',
+      tech: 'Spring Boot 3.4 / WebSocket STOMP / Redis PubSub',
+      port: 8087,
+      status: 'UP',
+      instances: 2,
+      health: '100% OK',
+      role: 'Doctor-Patient consultation channels, Redis presence & CCU tracking, WebSocket/STOMP messaging',
+      traffic: '1,200 msgs/s'
     }
   ];
 
@@ -236,7 +247,7 @@ async function startServer() {
       status: 'UP',
       timestamp: new Date().toISOString(),
       eurekaCluster: 'http://service-registry:8761/eureka/',
-      activeMicroservices: 8,
+      activeMicroservices: 9,
       kafkaBrokers: ['kafka:9092'],
       redisNodes: ['redis:6379'],
       elasticsearchCluster: 'healthcare-rpm-cluster (1 Node - Green)'
@@ -1982,6 +1993,228 @@ async function startServer() {
     const scenario = req.body.scenario || req.body.trigger || 'reset';
     const result = monitoringEngine.simulateScenario(scenario);
     res.json(result);
+  });
+
+  // =========================================================================
+  // 9. Realtime Chat Service & AWS Infrastructure Cost Estimator APIs
+  // =========================================================================
+  interface ChatMessageRecord {
+    id: string;
+    roomId: string;
+    senderId: string;
+    senderName: string;
+    senderRole: 'ROLE_DOCTOR' | 'ROLE_PATIENT' | 'ROLE_NURSE' | 'ROLE_ADMIN' | 'SYSTEM';
+    content: string;
+    type: 'CHAT' | 'JOIN' | 'LEAVE' | 'TYPING' | 'CONSULTATION_ALERT' | 'SYSTEM';
+    timestamp: string;
+    delivered: boolean;
+    read: boolean;
+  }
+
+  interface ChatRoomRecord {
+    id: string;
+    name: string;
+    type: 'DOCTOR_PATIENT' | 'CARE_TEAM' | 'TRIAGE' | 'EMERGENCY' | 'CLINICAL_CASE';
+    appointmentId?: string;
+    patientId?: string;
+    doctorId?: string;
+    description: string;
+    active: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  const chatRooms: ChatRoomRecord[] = [
+    {
+      id: 'ROOM-CARDIO-101',
+      name: 'Dr. Emily Vance & Eleanor Vance Consultation',
+      type: 'DOCTOR_PATIENT',
+      appointmentId: 'APT-8401',
+      patientId: 'PAT-101',
+      doctorId: 'DOC-204',
+      description: 'Cardiology Teleconsultation Channel - Blood pressure monitoring & Atorvastatin titration discussion.',
+      active: true,
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      updatedAt: new Date(Date.now() - 60000).toISOString()
+    },
+    {
+      id: 'ROOM-ER-CODEBLUE',
+      name: 'Emergency Resuscitation Team (Code Blue)',
+      type: 'EMERGENCY',
+      description: 'Rapid-response triage room for critical telemetry anomalies (SpO2 < 90% or Heart Rate > 140 bpm).',
+      active: true,
+      createdAt: new Date(Date.now() - 7200000).toISOString(),
+      updatedAt: new Date(Date.now() - 120000).toISOString()
+    },
+    {
+      id: 'ROOM-TRIAGE-GENERAL',
+      name: 'Clinical RPM Triage & IoT Device Onboarding',
+      type: 'TRIAGE',
+      description: 'Nurse triage channel for continuous vital monitoring, device pairing, and prescription fulfillment checks.',
+      active: true,
+      createdAt: new Date(Date.now() - 86400000).toISOString(),
+      updatedAt: new Date(Date.now() - 300000).toISOString()
+    }
+  ];
+
+  const chatMessages: ChatMessageRecord[] = [
+    {
+      id: 'MSG-001',
+      roomId: 'ROOM-CARDIO-101',
+      senderId: 'DOC-204',
+      senderName: 'Dr. Emily Vance (MD, FACC)',
+      senderRole: 'ROLE_DOCTOR',
+      content: 'Hello Eleanor! I noticed your resting blood pressure was slightly elevated this morning (138/88 mmHg). How have you been feeling after taking the prescribed dosage?',
+      type: 'CHAT',
+      timestamp: new Date(Date.now() - 180000).toISOString(),
+      delivered: true,
+      read: true
+    },
+    {
+      id: 'MSG-002',
+      roomId: 'ROOM-CARDIO-101',
+      senderId: 'PAT-101',
+      senderName: 'Eleanor Vance',
+      senderRole: 'ROLE_PATIENT',
+      content: 'Good morning Dr. Vance! Feeling much better today. The palpitations have stopped since yesterday afternoon. I took the Atorvastatin 20mg right after breakfast.',
+      type: 'CHAT',
+      timestamp: new Date(Date.now() - 120000).toISOString(),
+      delivered: true,
+      read: true
+    },
+    {
+      id: 'MSG-003',
+      roomId: 'ROOM-CARDIO-101',
+      senderId: 'DOC-204',
+      senderName: 'Dr. Emily Vance (MD, FACC)',
+      senderRole: 'ROLE_DOCTOR',
+      content: 'That is wonderful news. Keep wearing the RPM smart patch so our telemetry pipeline continues streaming your ECG signals. Let me know immediately if you feel dizzy.',
+      type: 'CHAT',
+      timestamp: new Date(Date.now() - 60000).toISOString(),
+      delivered: true,
+      read: true
+    },
+    {
+      id: 'MSG-004',
+      roomId: 'ROOM-ER-CODEBLUE',
+      senderId: 'SYSTEM',
+      senderName: 'System Telemetry Alert',
+      senderRole: 'SYSTEM',
+      content: 'CRITICAL EVENT: Patient PAT-101 triggered Tachycardia alert (Heart Rate 142 bpm on Bed 04). Emergency response team dispatched.',
+      type: 'CONSULTATION_ALERT',
+      timestamp: new Date(Date.now() - 300000).toISOString(),
+      delivered: true,
+      read: true
+    },
+    {
+      id: 'MSG-005',
+      roomId: 'ROOM-ER-CODEBLUE',
+      senderId: 'NR-101',
+      senderName: 'Nurse Sarah Jenkins',
+      senderRole: 'ROLE_NURSE',
+      content: 'Arrived at Bed 04 with defibrillator and IV access kit. Patient is conscious and stable, administering oxygen mask.',
+      type: 'CHAT',
+      timestamp: new Date(Date.now() - 240000).toISOString(),
+      delivered: true,
+      read: true
+    }
+  ];
+
+  let simulatedChatCcu = 5000;
+  const connectedUsersList = new Set(['DOC-204', 'PAT-101', 'NR-101', 'CLINICIAN-08', 'PHARMACIST-02']);
+
+  // Chat Rooms API
+  app.get('/api/v1/chat/rooms', (req, res) => {
+    res.json(chatRooms);
+  });
+
+  app.post('/api/v1/chat/rooms', (req, res) => {
+    const { name, type = 'DOCTOR_PATIENT', appointmentId, patientId, doctorId, description = '' } = req.body;
+    const newRoom: ChatRoomRecord = {
+      id: `ROOM-${Date.now().toString(36).toUpperCase()}`,
+      name: name || 'New Consultation Channel',
+      type,
+      appointmentId,
+      patientId,
+      doctorId,
+      description,
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    chatRooms.unshift(newRoom);
+    res.status(201).json(newRoom);
+  });
+
+  app.get('/api/v1/chat/rooms/:roomId', (req, res) => {
+    const room = chatRooms.find(r => r.id === req.params.roomId);
+    if (!room) return res.status(404).json({ error: 'Chat room not found' });
+    res.json(room);
+  });
+
+  // Chat Messages API
+  app.get('/api/v1/chat/rooms/:roomId/messages', (req, res) => {
+    const msgs = chatMessages.filter(m => m.roomId === req.params.roomId);
+    res.json(msgs);
+  });
+
+  app.post('/api/v1/chat/rooms/:roomId/messages', (req, res) => {
+    const { roomId } = req.params;
+    const { senderId = 'PAT-101', senderName = 'Eleanor Vance', senderRole = 'ROLE_PATIENT', content, type = 'CHAT' } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Message content cannot be empty' });
+    }
+
+    const newMsg: ChatMessageRecord = {
+      id: `MSG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6)}`,
+      roomId,
+      senderId,
+      senderName,
+      senderRole,
+      content: content.trim(),
+      type,
+      timestamp: new Date().toISOString(),
+      delivered: true,
+      read: false
+    };
+
+    chatMessages.push(newMsg);
+
+    // Update room updatedAt
+    const room = chatRooms.find(r => r.id === roomId);
+    if (room) {
+      room.updatedAt = new Date().toISOString();
+    }
+
+    // Add to presence
+    connectedUsersList.add(senderId);
+
+    res.status(201).json(newMsg);
+  });
+
+  // Chat Presence & Realtime CCU API
+  app.get('/api/v1/chat/presence', (req, res) => {
+    res.json({
+      activeCcu: simulatedChatCcu,
+      connectedUserCount: connectedUsersList.size,
+      connectedUsers: Array.from(connectedUsersList),
+      status: 'HEALTHY',
+      redisClusterConnected: true,
+      redisHost: 'redis:6379 (ElastiCache t4g.small)',
+      throughputMsgsPerSec: Math.round((simulatedChatCcu * 6) / 60)
+    });
+  });
+
+  app.post('/api/v1/chat/presence/simulate-ccu', (req, res) => {
+    const { ccu } = req.body;
+    if (typeof ccu === 'number' && ccu >= 0) {
+      simulatedChatCcu = ccu;
+    }
+    res.json({
+      message: `Simulated CCU updated to ${simulatedChatCcu}`,
+      activeCcu: simulatedChatCcu
+    });
   });
 
   // Serve OpenAPI 3.0 Raw Spec (SpringDoc /v3/api-docs mirror)

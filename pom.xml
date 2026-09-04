@@ -20,6 +20,7 @@
         <module>microservices/fulfillment-service</module>
         <module>microservices/tracking-service</module>
         <module>microservices/notification-service</module>
+        <module>microservices/chat-service</module>
     </modules>
 
     <properties>

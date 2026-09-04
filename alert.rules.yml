@@ -115,3 +115,16 @@ groups:
         annotations:
           summary: "High Kafka consumer lag on topic {{ $labels.topic }}"
           description: "Consumer group {{ $labels.consumergroup }} lag is {{ $value }} messages on topic {{ $labels.topic }}."
+
+      # 11. Realtime Chat High Concurrency Saturation (> 25,000 CCU)
+      - alert: ChatHighConcurrencySaturation
+        expr: chat_active_ccu > 25000
+        for: 2m
+        labels:
+          severity: warning
+          team: platform-sre
+        annotations:
+          summary: "Realtime Chat CCU threshold exceeded: {{ $value }} active connections"
+          description: "Concurrent chat connections exceeded 25,000 CCU. Horizontal replica auto-scaling required for chat-service pods."
+
+

@@ -94,7 +94,30 @@ services:
         preserve_host: true
 
   # ----------------------------------------------------
-  # 7. Keycloak 24 IAM Gateway Direct Proxy
+  # 7. Realtime Chat & Consultation Messaging Service
+  # ----------------------------------------------------
+  - name: chat-service
+    url: http://chat-service:8087
+    routes:
+      - name: chat-api-routes
+        paths:
+          - /api/v1/chat
+        strip_path: false
+        preserve_host: true
+      - name: chat-websocket-routes
+        paths:
+          - /ws-chat
+          - /ws-chat-raw
+        protocols:
+          - http
+          - https
+          - ws
+          - wss
+        strip_path: false
+        preserve_host: true
+
+  # ----------------------------------------------------
+  # 8. Keycloak 24 IAM Gateway Direct Proxy
   # ----------------------------------------------------
   - name: keycloak-service
     url: http://keycloak:8080

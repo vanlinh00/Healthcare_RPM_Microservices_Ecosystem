@@ -24,6 +24,7 @@ services:
         psql -U postgres -c "CREATE DATABASE fulfillment_db;" || true
         psql -U postgres -c "CREATE DATABASE tracking_db;" || true
         psql -U postgres -c "CREATE DATABASE notification_db;" || true
+        psql -U postgres -c "CREATE DATABASE healthcare_chat_db;" || true
         psql -U postgres -c "CREATE DATABASE keycloak_db;" || true
         wait
     healthcheck:
@@ -170,6 +171,35 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - healthcare-network
+
+  # ----------------------------------------------------
+  # Realtime Chat & Consultation Messaging Service
+  # ----------------------------------------------------
+  chat-service:
+    build:
+      context: .
+      dockerfile: microservices/chat-service/Dockerfile
+    container_name: healthcare-chat-service
+    ports:
+      - "8087:8087"
+    environment:
+      - SERVER_PORT=8087
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgrespassword
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redispassword
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KEYCLOAK_ISSUER_URI=http://keycloak:8080/realms/healthcare-realm
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - healthcare-network
 

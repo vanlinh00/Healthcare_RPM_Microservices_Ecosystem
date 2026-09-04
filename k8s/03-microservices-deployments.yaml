@@ -206,3 +206,50 @@ spec:
       name: http
   selector:
     app: tracking-service
+---
+# -----------------------------------------------------------------------------
+# 7. Realtime Chat & Consultation Messaging Service
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-service
+  namespace: healthcare-rpm
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chat-service
+  template:
+    metadata:
+      labels:
+        app: chat-service
+    spec:
+      containers:
+        - name: chat-service
+          image: healthcare/chat-service:1.0.0
+          ports:
+            - containerPort: 8087
+          envFrom:
+            - configMapRef:
+                name: healthcare-global-config
+            - secretRef:
+                name: healthcare-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8087"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres-service:5432/healthcare_chat_db"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-service
+  namespace: healthcare-rpm
+spec:
+  ports:
+    - port: 8087
+      name: http
+  selector:
+    app: chat-service
+

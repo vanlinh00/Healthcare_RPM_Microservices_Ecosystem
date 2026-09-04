@@ -1,6 +1,6 @@
 {
   "name": "Healthcare & RPM Microservices Backend",
-  "description": "Enterprise-grade Healthcare & Remote Patient Monitoring backend microservices ecosystem featuring Java 17, Spring Boot 3.4, Keycloak 24 IAM, Prometheus & Grafana Observability, Kafka Transactional Outbox, Saga Orchestration, Redisson Distributed Locking, and Elasticsearch Telemetry.",
+  "description": "Enterprise-grade Healthcare & Remote Patient Monitoring backend microservices ecosystem featuring Java 17, Spring Boot 3.4, Realtime WebSocket/STOMP Chat Service with Redis Pub/Sub, AWS Tokyo Fargate Cost Telemetry, Keycloak 24 IAM, Prometheus & Grafana Observability, Kafka Transactional Outbox, Saga Orchestration, Redisson Distributed Locking, and Elasticsearch Telemetry.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
